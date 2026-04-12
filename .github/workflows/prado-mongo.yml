@@ -56,11 +56,11 @@ jobs:
       - name: Install Composer dependencies
         run: composer install --no-progress --prefer-dist --optimize-autoloader
 
+      - name: Install mongosh
+        run: npm install -g mongosh
+      
       - name: Setup MongoDB schema
-        run: |
-          docker cp ./tests/initdb_mongodb.js ${{ job.services.mongodb.id }}:/tmp/initdb_mongodb.js
-          docker exec ${{ job.services.mongodb.id }} \
-            mongosh "mongodb://localhost:27017/prado_unitest" --quiet --file /tmp/initdb_mongodb.js
+        run: mongosh "mongodb://localhost:27017/prado_unitest" --quiet tests/initdb_mongodb.js
 
       - name: Setup MongoDB schema
         run: mongosh "mongodb://localhost:27017" tests/initdb_mongodb.js

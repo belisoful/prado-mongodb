@@ -4,11 +4,8 @@
  * Mirrors the structure of initdb_firebird.sql / initdb_mysql.sql so that
  * the same field names can be used in cross-database tests.
  *
- * Run with mongosh (from the host):
- *   mongosh "mongodb://localhost:27017/prado_unitest" tests/initdb_mongodb.js
- *
- * Or inside the mongo:7 Docker container (CI / docker exec):
- *   mongosh "mongodb://localhost:27017/prado_unitest" --quiet --file /tmp/initdb_mongodb.js
+ * Run with mongosh (URI includes the database so db is correct from the start):
+ *   mongosh "mongodb://localhost:27017/prado_unitest" --quiet tests/initdb_mongodb.js
  *
  * Strategy: create collection → insert seed data → attach validator via collMod.
  * This avoids BSON type-coercion surprises during the seed insert while still
@@ -17,10 +14,9 @@
  *
  * The script is idempotent: it drops and recreates each collection.
  */
-
-// db is already set to prado_unitest by the URI.  getSiblingDB is a no-op
-// safety net when the script is invoked without a database in the URI.
-db = db.getSiblingDB('prado_unitest');
+  
+ // db is already set to prado_unitest by the connection URI.
+ // getSiblingDB is a safety net when the script is invoked without a database in the URI.
 
 // ================================================================
 // table1
