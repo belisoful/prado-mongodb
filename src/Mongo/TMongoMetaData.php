@@ -88,10 +88,18 @@ class TMongoMetaData extends \Prado\TComponent
 		// 1. Fetch validator / options via listCollections
 		$cursor = $manager->executeCommand($db, new Command([
 			'listCollections' => 1,
-			'filter' => ['name' => $collectionName],
+			//'filter' => ['name' => $collectionName],
+			'nameOnly' => false,
 		]));
 		$cursor->setTypeMap(['root' => 'array', 'document' => 'array', 'array' => 'array']);
-		$collections = $cursor->toArray();
+		//$collections = $cursor->toArray();
+		$collections = [];
+		foreach ($cursor as $info) {
+			if ($info['name'] === $collectionName) {
+				$collections[] = $info;
+				break;
+			}
+		}
 
 		$options = $collections !== [] ? ($collections[0]['options'] ?? []) : [];
 		$validator = $options['validator'] ?? [];
@@ -100,6 +108,21 @@ class TMongoMetaData extends \Prado\TComponent
 		// 2. Parse fields from the JSON Schema properties
 		$fields = $this->parseSchemaFields($jsonSchema);
 
+		// If no schema, inspect a sample document from the collection
+		if ($fields === []) {
+			// new to fix unit test
+			try {
+				$query = new \MongoDB\Driver\Query([], ['limit' => 1]);
+				$samples = $manager->executeQuery($db . '.' . $collectionName, $query);
+				$samples->setTypeMap(['root' => 'array', 'document' => 'array', 'array' => 'array']);
+				foreach ($samples as $sample) {
+					$fields = $this->inferFieldsFromDocument($sample);
+					break;
+				}
+			} catch (\Exception $e) {
+				// Ignore - leave fields empty
+			}
+		}
 		// Ensure _id is always present
 		if (!isset($fields['_id'])) {
 			$fields['_id'] = new TMongoFieldInfo([
@@ -149,6 +172,69 @@ class TMongoMetaData extends \Prado\TComponent
 		}
 
 		return $fields;
+	}
+
+	/**
+	 * Infers field information from a sample document.
+	 * @param array $document a sample document from the collection.
+	 * @return TMongoFieldInfo[] field info objects keyed by field name.
+	 */
+	protected function inferFieldsFromDocument(array $document): array
+	{ // new
+		$fields = [];
+		foreach ($document as $fieldName => $value) {
+			$bsonType = $this->inferBsonType($value);
+			$fields[$fieldName] = new TMongoFieldInfo([
+				'FieldName' => $fieldName,
+				'BsonType' => $bsonType,
+				'Required' => false,
+				'Description' => [],
+			]);
+		}
+		return $fields;
+	}
+
+	/**
+	 * Infers the BSON type from a PHP value.
+	 * @param mixed $value the PHP value.
+	 * @return string the BSON type.
+	 */
+	protected function inferBsonType($value): string
+	{// new
+		if ($value === null) {
+			return 'null';
+		}
+		if (is_bool($value)) {
+			return 'bool';
+		}
+		if (is_int($value)) {
+			return 'int';
+		}
+		if (is_float($value)) {
+			return 'double';
+		}
+		if (is_string($value)) {
+			return 'string';
+		}
+		if ($value instanceof \MongoDB\BSON\ObjectId) {
+			return 'objectId';
+		}
+		if ($value instanceof \MongoDB\BSON\UTCDateTime) {
+			return 'date';
+		}
+		if ($value instanceof \MongoDB\BSON\Decimal128) {
+			return 'decimal';
+		}
+		if ($value instanceof \MongoDB\BSON\Int64) {
+			return 'long';
+		}
+		if (is_array($value)) {
+			return 'array';
+		}
+		if (is_object($value)) {
+			return 'object';
+		}
+		return 'string';
 	}
 
 	/**

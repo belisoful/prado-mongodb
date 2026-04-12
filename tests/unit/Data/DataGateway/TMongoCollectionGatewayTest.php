@@ -15,19 +15,16 @@ class TMongoCollectionGatewayTest extends PHPUnit\Framework\TestCase
 	protected function setUp(): void
 	{
 		if (!extension_loaded('mongodb')) {
-			$this->markTestSkipped('The mongodb extension is not available.');
+			$this->fail('The mongodb extension is required for this test.');
 		}
 
 		$uri = getenv('MONGODB_URI') ?: 'mongodb://localhost:27017';
 		$db = getenv('MONGODB_DATABASE') ?: 'prado_unitest';
 
-		try {
-			$this->_conn = new TMongoConnection($uri, '', '', $db);
-			$this->_conn->setActive(true);
-			$this->_gateway = new TMongoCollectionGateway('table1', $this->_conn);
-		} catch (\Exception $e) {
-			$this->markTestSkipped('Cannot connect to MongoDB: ' . $e->getMessage());
-		}
+		$this->_conn = new TMongoConnection($uri, '', '', $db);
+		$this->_conn->setActive(true);
+		$this->_conn->getManager()->executeCommand($db, new \MongoDB\Driver\Command(['ping' => 1]));
+		$this->_gateway = new TMongoCollectionGateway('table1', $this->_conn);
 	}
 
 	protected function tearDown(): void

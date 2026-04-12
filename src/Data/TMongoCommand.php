@@ -762,7 +762,8 @@ class TMongoCommand extends \Prado\TComponent implements IDataCommand
 	public function count(array $filter = [], array $options = []): int
 	{
 		try {
-			$f = $filter !== [] ? $filter : $this->_filter;
+			$f = $filter !== [] ? (object) $filter : (object) [];
+			//$f = $filter !== [] ? $filter : $this->_filter;
 			$cmd = array_merge(['count' => $this->_collection, 'query' => $f], $options);
 			$cursor = $this->executeCommand($cmd);
 			$result = current($cursor->toArray());
@@ -784,7 +785,8 @@ class TMongoCommand extends \Prado\TComponent implements IDataCommand
 	{
 		try {
 			$f = $field !== '' ? $field : $this->_distinctField;
-			$filt = $filter !== [] ? $filter : $this->_filter;
+			$filt = $filter !== [] ? (object) $filter : (object) [];
+			//$filt = $filter !== [] ? $filter : $this->_filter;
 			$cmd = array_merge(['distinct' => $this->_collection, 'key' => $f, 'query' => $filt], $options);
 			$cursor = $this->executeCommand($cmd);
 			$result = current($cursor->toArray());
