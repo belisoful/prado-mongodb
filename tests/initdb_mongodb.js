@@ -4,23 +4,6 @@
  * Mirrors the structure of initdb_firebird.sql / initdb_mysql.sql so that
  * the same field names can be used in cross-database tests.
  *
- * Run with mongosh:
- *   mongosh "mongodb://localhost:27017" tests/initdb_mongodb.js
- *
- * Or inside a Docker container (CI):
- *   mongosh --quiet "mongodb://localhost:27017" /tmp/initdb_mongodb.js
- *
- * The script is idempotent: it drops and recreates each collection.
- */
-
-// old - const db = connect('mongodb://localhost:27017/prado_unitest');
-
-/**
- * MongoDB test database schema for prado unit tests.
- *
- * Mirrors the structure of initdb_firebird.sql / initdb_mysql.sql so that
- * the same field names can be used in cross-database tests.
- *
  * Run with mongosh (from the host):
  *   mongosh "mongodb://localhost:27017" tests/initdb_mongodb.js
  *
@@ -56,11 +39,11 @@ db.createCollection('table1', {
 					description: 'small integer field',
 				},
 				field2_string: {
-					bsonType: ['string', 'null'],
+					bsonType: 'string',
 					description: 'optional varchar field',
 				},
 				field3_date: {
-					bsonType: ['date', 'null'],
+					bsonType: 'date',
 					description: 'optional date field',
 				},
 				field4_double: {
@@ -84,7 +67,7 @@ db.createCollection('table1', {
 					description: 'bigint field',
 				},
 				field9_string: {
-					bsonType: ['string', 'null'],
+					bsonType: 'string',
 					description: 'optional char field',
 				},
 				field10_bool: {
@@ -92,7 +75,7 @@ db.createCollection('table1', {
 					description: 'boolean field',
 				},
 				field11_string: {
-					bsonType: ['string', 'null'],
+					bsonType: 'string',
 					description: 'optional text / blob field',
 				},
 			},
@@ -102,19 +85,17 @@ db.createCollection('table1', {
 
 db.table1.createIndex({ name: 1 });
 
+// Only required fields are inserted; optional fields are simply absent so the
+// validator does not check their type (omitted ≠ null for JSON Schema).
 db.table1.insertOne({
 	name: 'test',
 	field1_int: NumberInt(0),
-	field2_string: null,
-	field3_date: null,
 	field4_double: 10.0,
 	field5_double: 0.0,
 	field6_date: new Date(),
 	field7_string: '00:00:00',
-	field8_int: NumberLong(0),
-	field9_string: null,
+	field8_int: NumberLong('0'),
 	field10_bool: false,
-	field11_string: null,
 });
 
 // ----------------------------------------------------------------
@@ -153,7 +134,7 @@ db.createCollection('address', {
 					description: 'integer field',
 				},
 				field5_string: {
-					bsonType: ['string', 'null'],
+					bsonType: 'string',
 					description: 'optional text field',
 				},
 				field6_string: {
@@ -187,6 +168,7 @@ db.createCollection('address', {
 
 db.address.createIndex({ username: 1 }, { unique: true });
 
+// Only required fields; int_fk1/int_fk2 and field5_string are optional and omitted.
 db.address.insertOne({
 	username: 'wei',
 	phone: '1111111',
@@ -194,13 +176,10 @@ db.address.insertOne({
 	field2_date: new Date(),
 	field3_double: 0.0,
 	field4_int: NumberInt(0),
-	field5_string: null,
 	field6_string: '00:00:00',
 	field7_date: new Date(),
 	field8_decimal: NumberDecimal('0.0000'),
 	field9_decimal: NumberDecimal('0.0000'),
-	int_fk1: NumberInt(0),
-	int_fk2: NumberInt(0),
 });
 
 print('MongoDB schema initialised: prado_unitest.table1, prado_unitest.address');
