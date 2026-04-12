@@ -60,7 +60,7 @@ use Prado\Exceptions\TDbException;
  * automatically include the transaction session.
  *
  * @author Brad Anderson <belisoful@icloud.com>
- * @since 4.3.3
+ * @since 1.0.0
  */
 class TMongoCommand extends \Prado\TComponent implements IDataCommand
 {

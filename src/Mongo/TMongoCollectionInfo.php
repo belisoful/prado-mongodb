@@ -24,7 +24,7 @@ use Prado\Data\TMongoConnection;
  * {@see getIndexes} may be empty if no validator or indexes are defined.
  *
  * @author Brad Anderson <belisoful@icloud.com>
- * @since 4.3.3
+ * @since 1.0.0
  */
 class TMongoCollectionInfo extends \Prado\TComponent
 {

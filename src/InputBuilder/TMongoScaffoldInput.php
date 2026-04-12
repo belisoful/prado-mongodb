@@ -37,7 +37,7 @@ use Prado\Web\UI\WebControls\TValidatorDisplayStyle;
  * {@see \Prado\Data\Common\Mongo\TMongoFieldInfo} instance.
  *
  * @author Brad Anderson <belisoful@icloud.com>
- * @since 4.3.3
+ * @since 1.0.0
  */
 class TMongoScaffoldInput extends TScaffoldInputBase
 {

@@ -57,14 +57,14 @@ use Prado\TPropertyValue;
  * ```
  *
  * @author Brad Anderson <belisoful@icloud.com>
- * @since 4.3.3
+ * @since 1.0.0
  */
 class TMongoConnection extends \Prado\TComponent implements IDataConnection
 {
 	public const DRIVER_NAME = 'mongo';
 	/**
 	 * Default transaction class name.
-	 * @since 4.3.3
+	 * @since 1.0.0
 	 */
 	public const DEFAULT_TRANSACTION_CLASS = TMongoTransaction::class;
 
@@ -81,7 +81,7 @@ class TMongoConnection extends \Prado\TComponent implements IDataConnection
 
 	/**
 	 * @var string
-	 * @since 4.3.3
+	 * @since 1.0.0
 	 */
 	private string $_transactionClass = self::DEFAULT_TRANSACTION_CLASS;
 
@@ -276,7 +276,6 @@ class TMongoConnection extends \Prado\TComponent implements IDataConnection
 
 	/**
 	 * @return string transaction class name created by {@see beginTransaction}. Defaults to TMongoTransaction.
-	 * @since 4.3.3
 	 */
 	public function getTransactionClass(): string
 	{
@@ -285,7 +284,6 @@ class TMongoConnection extends \Prado\TComponent implements IDataConnection
 
 	/**
 	 * @param string $value transaction class name created by {@see beginTransaction}.
-	 * @since 4.3.3
 	 */
 	public function setTransactionClass(string $value): void
 	{

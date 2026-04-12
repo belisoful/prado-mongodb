@@ -29,7 +29,7 @@ use Prado\Exceptions\TDbException;
  * Collection info objects are cached per collection name.
  *
  * @author Brad Anderson <belisoful@icloud.com>
- * @since 4.3.3
+ * @since 1.0.0
  */
 class TMongoMetaData extends \Prado\TComponent
 {

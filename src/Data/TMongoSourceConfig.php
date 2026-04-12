@@ -44,11 +44,13 @@ use Prado\TApplication;
  * Set {@see setConnectionClass} attribute for a custom database connection class
  * that extends the TDbConnection class.
  *
- * @author Wei Zhuo <weizho[at]gmail[dot]com>
+ * @author Brad Anderson <belisoful@icloud.com>
  * @since 3.1
  */
 class TMongoSourceConfig extends \Prado\Data\TDataSourceConfig
 {
+    private static bool $_installed;
+
 	public function dyPreInit($config)
 	{
 		$this->setConnectionClass(TMongoConnection::class);
@@ -82,4 +84,41 @@ class TMongoSourceConfig extends \Prado\Data\TDataSourceConfig
 			throw new TConfigurationException('datasource_dbconnection_invalid', $id);
 		}
 	}
+    
+    /**
+     * if {@see TDbMetaData::getInstance()} cannot find a driver it raises this
+     * global event to find the TDbMetaData for the IDbConnection in $param
+     * @param string $sender the static class raising this event.
+     * @param IDataConnection|mixed $param
+     * @return ?TDbMetaData
+     */
+    public function fxGetMetaDataInstance($sender, $param)
+    {
+        if (!($param instanceof IDataConnection)) {
+            return null;
+        }
+        if ($param->getDriverName() !== 'mongo') {
+            return null;
+        }
+        return new TMongoMetaData($param);
+    }
+    
+    /**
+     * if {@see TScaffoldInputBase::createInputBuilder()} cannot find a driver
+     * it raises this global event to find the TDbMetaData for the IDbConnection
+     * in $param
+     * @param mixed $sender
+     * @param IDataConnection $param
+     * @return ?TScaffoldInputBase
+     */
+    public function fxActiveRecordScaffoldInput($sender, $param)
+    {
+        if (!($param instanceof IDataConnection)) {
+            return null;
+        }
+        if ($param->getDriverName() !== 'mongo') {
+            return null;
+        }
+        return new TMongoScaffoldInput();
+    }
 }

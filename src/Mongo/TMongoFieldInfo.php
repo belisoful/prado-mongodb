@@ -22,7 +22,7 @@ namespace Prado\Data\Common\Mongo;
  * validator marks the field as required.
  *
  * @author Brad Anderson <belisoful@icloud.com>
- * @since 4.3.3
+ * @since 1.0.0
  */
 class TMongoFieldInfo extends \Prado\TComponent
 {

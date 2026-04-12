@@ -43,7 +43,7 @@ use Prado\TPropertyValue;
  * ```
  *
  * @author Brad Anderson <belisoful@icloud.com>
- * @since 4.3.3
+ * @since 1.0.0
  */
 class TMongoTransaction extends \Prado\TComponent implements IDataTransaction
 {

@@ -51,6 +51,6 @@
 		"unittest": "vendor/bin/phpunit --testsuite unit"
 	},
 	"extra": {
-		"bootstrap": "Belisoful\\Modules\\TMongoDbModule"
+		"bootstrap": "Prado\\Data\\TMongoSourceConfig"
 	}
 }

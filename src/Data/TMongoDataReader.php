@@ -50,7 +50,7 @@ use Prado\Exceptions\TDbException;
  * ```
  *
  * @author Brad Anderson <belisoful@icloud.com>
- * @since 4.3.3
+ * @since 1.0.0
  */
 class TMongoDataReader extends \Prado\TComponent implements IDataReader
 {
