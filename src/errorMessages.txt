@@ -1,0 +1,8 @@
+
+mongoconnection_open_failed				= TMongoConnection failed to establish MongoDB connection: {0}
+mongoconnection_connection_inactive		= TMongoConnection is inactive.
+mongoconnection_missing_database		= TMongoConnection requires DatabaseName to be set before accessing a collection.
+mongoconnection_extension_required		= The MongoDB PHP extension (ext-mongodb) is required for TMongoConnection.
+mongocommand_execute_failed				= TMongoCommand failed to execute: {0}
+mongocommand_query_failed				= TMongoCommand failed to execute the query: {0}
+mongotransaction_inactive				= TMongoTransaction is inactive.
