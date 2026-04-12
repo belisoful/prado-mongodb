@@ -18,7 +18,8 @@
 			"Belisoful\\Mongo\\": "src",
 			"Prado\\Data\\": "src/Data",
 			"Prado\\Data\\ActiveRecord\\Scaffold\\InputBuilder\\": "src/InputBuilder",
-			"Prado\\Data\\Common\\Mongo\\": "src/Mongo"
+			"Prado\\Data\\Common\\Mongo\\": "src/Mongo",
+			"Prado\\Data\\DataGateway\\": "src/DataGateway"
 		}
 	},
 	"repositories": [
