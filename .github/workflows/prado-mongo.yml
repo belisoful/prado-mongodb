@@ -59,7 +59,8 @@ jobs:
       - name: Setup MongoDB schema
         run: |
           docker cp ./tests/initdb_mongodb.js ${{ job.services.mongodb.id }}:/tmp/initdb_mongodb.js
-          docker exec ${{ job.services.mongodb.id }} mongosh --quiet --file /tmp/initdb_mongodb.js
+          docker exec ${{ job.services.mongodb.id }} \
+            mongosh "mongodb://localhost:27017/prado_unitest" --quiet --file /tmp/initdb_mongodb.js
 
       - name: Setup MongoDB schema
         run: mongosh "mongodb://localhost:27017" tests/initdb_mongodb.js

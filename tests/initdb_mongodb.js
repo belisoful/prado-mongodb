@@ -5,34 +5,59 @@
  * the same field names can be used in cross-database tests.
  *
  * Run with mongosh (from the host):
- *   mongosh "mongodb://localhost:27017" tests/initdb_mongodb.js
+ *   mongosh "mongodb://localhost:27017/prado_unitest" tests/initdb_mongodb.js
  *
  * Or inside the mongo:7 Docker container (CI / docker exec):
- *   mongosh --quiet --file /tmp/initdb_mongodb.js
+ *   mongosh "mongodb://localhost:27017/prado_unitest" --quiet --file /tmp/initdb_mongodb.js
+ *
+ * Strategy: create collection → insert seed data → attach validator via collMod.
+ * This avoids BSON type-coercion surprises during the seed insert while still
+ * making the full JSON Schema visible to listCollections (and therefore to
+ * TMongoMetaData / MongoColumnTest).
  *
  * The script is idempotent: it drops and recreates each collection.
  */
 
-// When executed via `docker exec … mongosh --file`, mongosh connects to the
-// local instance automatically.  When run from the host with a URI argument,
-// mongosh passes the session in as `db`.  In either case we switch to the
-// target database using getSiblingDB() so the script works in both contexts.
+// db is already set to prado_unitest by the URI.  getSiblingDB is a no-op
+// safety net when the script is invoked without a database in the URI.
 db = db.getSiblingDB('prado_unitest');
 
-// ----------------------------------------------------------------
+// ================================================================
 // table1
-// ----------------------------------------------------------------
+// ================================================================
 
 db.table1.drop();
-db.createCollection('table1', {
+db.createCollection('table1');           // no validator yet
+db.table1.createIndex({ name: 1 });
+
+// Seed document — inserted before the validator is attached so BSON type
+// coercion by the shell can never cause a spurious validation failure.
+db.table1.insertOne({
+	name: 'test',
+	field1_int: NumberInt(0),
+	field4_double: 10.0,
+	field5_double: 0.0,
+	field6_date: new Date(),
+	field7_string: '00:00:00',
+	field8_int: NumberLong('0'),
+	field10_bool: false,
+});
+
+// Attach the JSON Schema validator after the seed insert.
+// TMongoMetaData reads this via listCollections.
+db.runCommand({
+	collMod: 'table1',
 	validator: {
 		$jsonSchema: {
 			bsonType: 'object',
-			required: ['name', 'field1_int', 'field4_double', 'field5_double', 'field6_date', 'field8_int', 'field10_bool'],
+			required: [
+				'name', 'field1_int', 'field4_double', 'field5_double',
+				'field6_date', 'field7_string', 'field8_int', 'field10_bool',
+			],
 			properties: {
 				name: {
 					bsonType: 'string',
-					description: 'must be a string and is required',
+					description: 'display name, required',
 				},
 				field1_int: {
 					bsonType: 'int',
@@ -48,7 +73,7 @@ db.createCollection('table1', {
 				},
 				field4_double: {
 					bsonType: 'double',
-					description: 'float field',
+					description: 'float / double field',
 				},
 				field5_double: {
 					bsonType: 'double',
@@ -60,7 +85,7 @@ db.createCollection('table1', {
 				},
 				field7_string: {
 					bsonType: 'string',
-					description: 'time stored as string HH:MM:SS',
+					description: 'time stored as HH:MM:SS string',
 				},
 				field8_int: {
 					bsonType: 'long',
@@ -81,33 +106,41 @@ db.createCollection('table1', {
 			},
 		},
 	},
+	validationLevel: 'strict',
+	validationAction: 'error',
 });
 
-db.table1.createIndex({ name: 1 });
-
-// Only required fields are inserted; optional fields are simply absent so the
-// validator does not check their type (omitted ≠ null for JSON Schema).
-db.table1.insertOne({
-	name: 'test',
-	field1_int: NumberInt(0),
-	field4_double: 10.0,
-	field5_double: 0.0,
-	field6_date: new Date(),
-	field7_string: '00:00:00',
-	field8_int: NumberLong('0'),
-	field10_bool: false,
-});
-
-// ----------------------------------------------------------------
+// ================================================================
 // address
-// ----------------------------------------------------------------
+// ================================================================
 
 db.address.drop();
-db.createCollection('address', {
+db.createCollection('address');          // no validator yet
+db.address.createIndex({ username: 1 }, { unique: true });
+
+db.address.insertOne({
+	username: 'wei',
+	phone: '1111111',
+	field1_bool: false,
+	field2_date: new Date(),
+	field3_double: 0.0,
+	field4_int: NumberInt(0),
+	field6_string: '00:00:00',
+	field7_date: new Date(),
+	field8_decimal: NumberDecimal('0.0000'),
+	field9_decimal: NumberDecimal('0.0000'),
+});
+
+db.runCommand({
+	collMod: 'address',
 	validator: {
 		$jsonSchema: {
 			bsonType: 'object',
-			required: ['username', 'phone', 'field1_bool', 'field2_date', 'field3_double', 'field4_int', 'field6_string', 'field7_date', 'field8_decimal', 'field9_decimal'],
+			required: [
+				'username', 'phone', 'field1_bool', 'field2_date',
+				'field3_double', 'field4_int', 'field6_string', 'field7_date',
+				'field8_decimal', 'field9_decimal',
+			],
 			properties: {
 				username: {
 					bsonType: 'string',
@@ -131,7 +164,7 @@ db.createCollection('address', {
 				},
 				field4_int: {
 					bsonType: 'int',
-					description: 'integer field',
+					description: 'integer / foreign-key field',
 				},
 				field5_string: {
 					bsonType: 'string',
@@ -139,7 +172,7 @@ db.createCollection('address', {
 				},
 				field6_string: {
 					bsonType: 'string',
-					description: 'time stored as string HH:MM:SS',
+					description: 'time stored as HH:MM:SS string',
 				},
 				field7_date: {
 					bsonType: 'date',
@@ -164,22 +197,8 @@ db.createCollection('address', {
 			},
 		},
 	},
-});
-
-db.address.createIndex({ username: 1 }, { unique: true });
-
-// Only required fields; int_fk1/int_fk2 and field5_string are optional and omitted.
-db.address.insertOne({
-	username: 'wei',
-	phone: '1111111',
-	field1_bool: false,
-	field2_date: new Date(),
-	field3_double: 0.0,
-	field4_int: NumberInt(0),
-	field6_string: '00:00:00',
-	field7_date: new Date(),
-	field8_decimal: NumberDecimal('0.0000'),
-	field9_decimal: NumberDecimal('0.0000'),
+	validationLevel: 'strict',
+	validationAction: 'error',
 });
 
 print('MongoDB schema initialised: prado_unitest.table1, prado_unitest.address');
