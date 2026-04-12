@@ -121,6 +121,18 @@ class TMongoConnection extends \Prado\TComponent implements IDataConnection
 	}
 
 	/**
+	 * @return ?Manager the MongoDB driver manager.
+	 */
+	public function getManager(): ?Manager
+	{
+		/*	if (!$this->_active) {
+			// * @ throws TDbException if the connection is not active.
+				throw new TDbException('mongoconnection_connection_inactive');
+			}*/
+		return $this->_manager;
+	}
+
+	/**
 	 * @return bool whether the connection is open.
 	 */
 	public function getActive(): bool
@@ -288,19 +300,6 @@ class TMongoConnection extends \Prado\TComponent implements IDataConnection
 	public function setTransactionClass(string $value): void
 	{
 		$this->_transactionClass = $value;
-	}
-
-	/**
-	 * Returns the underlying {@see Manager} instance.
-	 * @return Manager the MongoDB driver manager.
-	 */
-	public function getManager(): Manager
-	{
-		/*	if (!$this->_active) {
-			// * @ throws TDbException if the connection is not active.
-				throw new TDbException('mongoconnection_connection_inactive');
-			}*/
-		return $this->_manager;
 	}
 
 	/**

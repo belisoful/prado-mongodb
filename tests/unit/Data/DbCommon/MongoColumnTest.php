@@ -10,7 +10,7 @@ class MongoColumnTest extends PHPUnit\Framework\TestCase
 	protected function setUp(): void
 	{
 		if (!extension_loaded('mongodb')) {
-			$this->markTestSkipped('The mongodb extension is not available.');
+			$this->fail('The mongodb extension is required for this test.');
 		}
 	}
 
@@ -20,17 +20,15 @@ class MongoColumnTest extends PHPUnit\Framework\TestCase
 		$uri = getenv('MONGODB_URI') ?: 'mongodb://localhost:27017';
 		$db = getenv('MONGODB_DATABASE') ?: 'prado_unitest';
 		$conn = new TMongoConnection($uri, '', '', $db);
+		$conn->setActive(true);
+		$conn->getManager()->executeCommand($db, new \MongoDB\Driver\Command(['ping' => 1]));
 		return new TMongoMetaData($conn);
 	}
 
 	public function test_fields()
 	{
 		$meta = $this->create_meta_data();
-		try {
-			$info = $meta->getCollectionInfo('table1');
-		} catch (\Exception $e) {
-			$this->markTestSkipped('Cannot connect to MongoDB: ' . $e->getMessage());
-		}
+		$info = $meta->getCollectionInfo('table1');
 
 		// Schema: see tests/initdb_mongodb.js
 		$this->assertInstanceOf(TMongoCollectionInfo::class, $info);
