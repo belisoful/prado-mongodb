@@ -33,7 +33,7 @@
 		"mongodb/mongodb" : "^2.1"
 	},
 	"require-dev" : {
-		"pradosoft/prado" : "^4.3.2,^4.4",
+		"pradosoft/prado" : "^4.3.2",
 		"phpunit/phpunit" : "^10",
 		"phpdocumentor/shim": "^3",
 		"friendsofphp/php-cs-fixer": "^3.94",
