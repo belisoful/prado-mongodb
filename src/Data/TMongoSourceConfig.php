@@ -10,6 +10,7 @@
 
 namespace Prado\Data;
 
+use Prado\Data\TMongoConnection;
 use Prado\Exceptions\TConfigurationException;
 use Prado\Prado;
 use Prado\TApplication;
@@ -50,9 +51,9 @@ class TMongoSourceConfig extends \Prado\Data\TDataSourceConfig
 {
 	public function dyPreInit($config)
 	{
-		$this->setConnectionClass(\Prado\Data\TMongoConnection);
+		$this->setConnectionClass(TMongoConnection::class);
 	}
-	
+
 
 	/**
 	 * Alias for getDbConnection().
@@ -61,31 +62,6 @@ class TMongoSourceConfig extends \Prado\Data\TDataSourceConfig
 	public function getDatabase()
 	{
 		return $this->getDbConnection();
-	}
-
-	/**
-	 * @return string Database connection class name to be created.
-	 */
-	public function getConnectionClass()
-	{
-		return $this->_connClass;
-	}
-
-	/**
-	 * The database connection class name to be created when {@see getDbConnection}
-	 * method is called <b>and</b> {@see setConnectionID ConnectionID} is null. The
-	 * {@see setConnectionClass ConnectionClass} property must be set before
-	 * calling {@see getDbConnection} if you wish to create the connection using the
-	 * given class name.
-	 * @param string $value Database connection class name.
-	 * @throws TConfigurationException when database connection is already established.
-	 */
-	public function setConnectionClass($value)
-	{
-		if ($this->_conn !== null) {
-			throw new TConfigurationException('datasource_dbconnection_exists', $value);
-		}
-		$this->_connClass = $value;
 	}
 
 	/**

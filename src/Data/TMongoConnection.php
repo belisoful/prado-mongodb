@@ -61,6 +61,7 @@ use Prado\TPropertyValue;
  */
 class TMongoConnection extends \Prado\TComponent implements IDataConnection
 {
+	public const DRIVER_NAME = 'mongo';
 	/**
 	 * Default transaction class name.
 	 * @since 4.3.3
@@ -399,5 +400,13 @@ class TMongoConnection extends \Prado\TComponent implements IDataConnection
 		$cursor->setTypeMap(['root' => 'array', 'document' => 'array', 'array' => 'array']);
 		$info = current($cursor->toArray());
 		return $info['version'] ?? 'unknown';
+	}
+
+	/**
+	 * @return string name of the DB driver
+	 */
+	public function getDriverName()
+	{
+		return 'mongo';
 	}
 }

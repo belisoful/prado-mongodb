@@ -15,8 +15,10 @@
 	],
 	"autoload": {
 		"psr-4": {
-			"Belisoful\\Modules\\Mongo\\": "src",
-			"Prado\\Data\\Common\\Mongo\\": "src/mongo"
+			"Belisoful\\Mongo\\": "src",
+			"Prado\\Data\\": "src/Data",
+			"Prado\\Data\\ActiveRecord\\Scaffold\\InputBuilder\\": "src/InputBuilder",
+			"Prado\\Data\\Common\\Mongo\\": "src/Mongo"
 		}
 	},
 	"repositories": [
@@ -30,7 +32,7 @@
 		"mongodb/mongodb" : "^2.2"
 	},
 	"require-dev" : {
-		"pradosoft/prado" : "^4.2.0-alpha1",
+		"pradosoft/prado" : "^4.3.3,^4.4",
 		"phpunit/phpunit" : "^10",
 		"phpdocumentor/shim": "^3",
 		"friendsofphp/php-cs-fixer": "^3.94",

@@ -10,44 +10,56 @@
 
 namespace Belisoful\Modules;
 
-use Prado\TPropertyValue;
-use Prado\TModule;
+use Prado\Data\ActiveRecord\Scaffold\InputBuilder\TMongoScaffoldInput;
+use Prado\Data\ActiveRecord\Scaffold\InputBuilder\TScaffoldInputBase;
 use Prado\Data\Common\Mongo\TMongoMetaData;
+use Prado\Data\Common\TDbMetaData;
+use Prado\Data\IDataConnection;
+use Prado\Data\TMongoSourceConfig;
 
 /**
- * MainModule class.
+ * TMongoDbModule class.
  *
- * main example bootstrap module class
  *
  * @author Brad Anderson <belisoful@icloud.com>
  * @since 1.0.0
  */
-class TMongoDbModule extends TModule
+class TMongoDbModule extends TMongoSourceConfig
 {
-	/** @var null|string property A */
-	private $_propertya;
-
 	/**
-	 * Initializes the module, call the parent:init.
-	 * @param null|array|\Prado\Xml\TXmlElement $config
+	 * if {@see TDbMetaData::getInstance()} cannot find a driver it raises this
+	 * global event to find the TDbMetaData for the IDbConnection in $param
+	 * @param string $sender the static class raising this event.
+	 * @param IDataConnection|mixed $param
+	 * @return ?TDbMetaData
 	 */
-	public function init($config)
+	public function fxGetMetaDataInstance($sender, $param)
 	{
-		parent::init($config);
+		if (!($param instanceof IDataConnection)) {
+			return null;
+		}
+		if ($param->getDriverName() !== 'mongo') {
+			return null;
+		}
+		return new TMongoMetaData($param);
 	}
 
 	/**
-	 * Initializes the module, call the parent:init.
+	 * if {@see TScaffoldInputBase::createInputBuilder()} cannot find a driver
+	 * it raises this global event to find the TDbMetaData for the IDbConnection
+	 * in $param
 	 * @param mixed $sender
-	 * @param TDbConnection $param
-	 * @return ?TDbMetaData 
+	 * @param IDataConnection $param
+	 * @return ?TScaffoldInputBase
 	 */
-	public function fxGetDbMetaDataInstance($sender, $param)
+	public function fxActiveRecordScaffoldInput($sender, $param)
 	{
-		if (!($param instanceof TDbConnection))
-		if ($param !== 'mongo') {
+		if (!($param instanceof IDataConnection)) {
 			return null;
 		}
-		return return new TMongoMetaData($param);
+		if ($param->getDriverName() !== 'mongo') {
+			return null;
+		}
+		return new TMongoScaffoldInput();
 	}
 }
