@@ -16,7 +16,7 @@
 	"autoload": {
 		"psr-4": {
 			"Belisoful\\Modules\\Mongo\\": "src",
-			"Prado\\Data\\Common\\Mongo\\": "src/mongo",
+			"Prado\\Data\\Common\\Mongo\\": "src/mongo"
 		}
 	},
 	"repositories": [
@@ -30,7 +30,7 @@
 		"mongodb/mongodb" : "^2.2"
 	},
 	"require-dev" : {
-		"pradosoft/prado" : "^4.2.0-alpha1"
+		"pradosoft/prado" : "^4.2.0-alpha1",
 		"phpunit/phpunit" : "^10",
 		"phpdocumentor/shim": "^3",
 		"friendsofphp/php-cs-fixer": "^3.94",
