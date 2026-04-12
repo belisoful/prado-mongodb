@@ -97,7 +97,7 @@ class TMongoSourceConfig extends \Prado\Data\TDataSourceConfig
 		if (!($param instanceof IDataConnection)) {
 			return null;
 		}
-		if ($param->getDriverName() !== 'mongo') {
+		if (strtolower($param->getDriverName()) !== 'mongo') {
 			return null;
 		}
 		return new TMongoMetaData($param);
@@ -111,12 +111,12 @@ class TMongoSourceConfig extends \Prado\Data\TDataSourceConfig
 	 * @param IDataConnection $param
 	 * @return ?TScaffoldInputBase
 	 */
-	public function fxActiveRecordScaffoldInput($sender, $param)
+	public function fxActiveRecordCreateScaffoldInput($sender, $param)
 	{
 		if (!($param instanceof IDataConnection)) {
 			return null;
 		}
-		if ($param->getDriverName() !== 'mongo') {
+		if (strtolower($param->getDriverName()) !== 'mongo') {
 			return null;
 		}
 		return new TMongoScaffoldInput();
