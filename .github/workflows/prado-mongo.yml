@@ -30,7 +30,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup PHP, with composer and extensions
-        uses: shivammathur/setup-php@v2 #https://github.com/shivammathur/setup-php
+        uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php-versions }}
           extensions: ctype, dom, intl, json, mbstring, mongodb, memcached, openssl, pcre, spl, zlib
@@ -55,7 +55,12 @@ jobs:
 
       - name: Install Composer dependencies
         run: composer install --no-progress --prefer-dist --optimize-autoloader
-        
+
+      - name: Setup MongoDB schema
+        run: |
+          docker cp ./tests/initdb_mongodb.js ${{ job.services.mongodb.id }}:/tmp/initdb_mongodb.js
+          docker exec ${{ job.services.mongodb.id }} mongosh --quiet --file /tmp/initdb_mongodb.js
+
       - name: Setup MongoDB schema
         run: mongosh "mongodb://localhost:27017" tests/initdb_mongodb.js
 
@@ -65,6 +70,6 @@ jobs:
       - name: Run Unit Tests
         run: |
           composer unittest
-
-
-
+        env:
+          MONGODB_URI: mongodb://localhost:27017
+          MONGODB_DATABASE: prado_unitest

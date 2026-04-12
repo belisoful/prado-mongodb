@@ -13,7 +13,28 @@
  * The script is idempotent: it drops and recreates each collection.
  */
 
-const db = connect('mongodb://localhost:27017/prado_unitest');
+// old - const db = connect('mongodb://localhost:27017/prado_unitest');
+
+/**
+ * MongoDB test database schema for prado unit tests.
+ *
+ * Mirrors the structure of initdb_firebird.sql / initdb_mysql.sql so that
+ * the same field names can be used in cross-database tests.
+ *
+ * Run with mongosh (from the host):
+ *   mongosh "mongodb://localhost:27017" tests/initdb_mongodb.js
+ *
+ * Or inside the mongo:7 Docker container (CI / docker exec):
+ *   mongosh --quiet --file /tmp/initdb_mongodb.js
+ *
+ * The script is idempotent: it drops and recreates each collection.
+ */
+
+// When executed via `docker exec … mongosh --file`, mongosh connects to the
+// local instance automatically.  When run from the host with a URI argument,
+// mongosh passes the session in as `db`.  In either case we switch to the
+// target database using getSiblingDB() so the script works in both contexts.
+db = db.getSiblingDB('prado_unitest');
 
 // ----------------------------------------------------------------
 // table1
