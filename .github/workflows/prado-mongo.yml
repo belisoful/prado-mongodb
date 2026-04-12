@@ -62,9 +62,6 @@ jobs:
       - name: Setup MongoDB schema
         run: mongosh "mongodb://localhost:27017/prado_unitest" --quiet tests/initdb_mongodb.js
 
-      - name: Setup MongoDB schema
-        run: mongosh "mongodb://localhost:27017" tests/initdb_mongodb.js
-
       - name: Validate code using phpstan
         run: phpstan analyse --error-format=checkstyle | cs2pr
 
