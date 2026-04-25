@@ -53,7 +53,7 @@ class TMongoSourceConfig extends \Prado\Data\TDataSourceConfig
 
 	public function dyPreInit($config)
 	{
-		$this->setConnectionClass(TMongoConnection::class);
+		parent::setConnectionClass(TMongoConnection::class);
 	}
 
 
@@ -92,7 +92,7 @@ class TMongoSourceConfig extends \Prado\Data\TDataSourceConfig
 	 * @param IDataConnection|mixed $param
 	 * @return ?TDbMetaData
 	 */
-	public function fxGetMetaDataInstance($sender, $param)
+	public function fxDataGetMetaDataInstance($sender, $param)
 	{
 		if (!($param instanceof IDataConnection)) {
 			return null;

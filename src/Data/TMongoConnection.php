@@ -11,6 +11,9 @@
 namespace Prado\Data;
 
 use MongoDB\Driver\Manager;
+use MongoDB\Driver\ReadConcern;
+use MongoDB\Driver\ReadPreference;
+use MongoDB\Driver\WriteConcern;
 use Prado\Data\Common\Mongo\TMongoMetaData;
 use Prado\Exceptions\TDbException;
 use Prado\Prado;
@@ -62,6 +65,7 @@ use Prado\TPropertyValue;
 class TMongoConnection extends \Prado\TComponent implements IDataConnection
 {
 	public const DRIVER_NAME = 'mongo';
+
 	/**
 	 * Default transaction class name.
 	 * @since 1.0.0
@@ -357,7 +361,7 @@ class TMongoConnection extends \Prado\TComponent implements IDataConnection
 		if (!$this->_active) {
 			throw new TDbException('mongoconnection_connection_inactive');
 		}
-		$session = $this->_manager->startSession();
+		$session = $this->getManager()->startSession();
 		$session->startTransaction();
 		return $this->_transaction = Prado::createComponent($this->getTransactionClass(), $this, $session);
 	}
@@ -401,10 +405,171 @@ class TMongoConnection extends \Prado\TComponent implements IDataConnection
 	}
 
 	/**
+	 * Returns the Manager's ReadConcern for queries and commands.
+	 * @throws TDbException if the connection is not active.
+	 * @return ReadConcern the ReadConcern object.
+	 */
+	public function getReadConcern(): ReadConcern
+	{
+		/*if (!$this->_active) {
+			// * @throws TDbException if the connection is not active.
+			throw new TDbException('mongoconnection_connection_inactive');
+		}*/
+		return $this->_manager->getReadConcern();
+	}
+
+	/**
+	 * Sets the default ReadConcern for queries and commands.
+	 * @param ReadConcern $readConcern the ReadConcern object.
+	 * @throws TDbException if opening fails.
+	 */
+	public function setReadConcern(ReadConcern $readConcern): void
+	{
+		/*if (!$this->_active) {
+			// * @throws TDbException if the connection is not active.
+			throw new TDbException('mongoconnection_connection_inactive');
+		}*/
+		$driverOptions = array_merge($this->_driverOptions, ['readConcern' => $readConcern]);
+		$this->close();
+		$this->_driverOptions = $driverOptions;
+		$this->open();
+	}
+
+	/**
+	 * Returns the Manager's WriteConcern for write operations.
+	 * @throws TDbException if the connection is not active.
+	 * @return WriteConcern the WriteConcern object.
+	 */
+	public function getWriteConcern(): WriteConcern
+	{
+		/*if (!$this->_active) {
+			// * @throws TDbException if the connection is not active.
+			throw new TDbException('mongoconnection_connection_inactive');
+		}*/
+		return $this->_manager->getWriteConcern();
+	}
+
+	/**
+	 * Sets the default WriteConcern for write operations.
+	 * @param WriteConcern $writeConcern the WriteConcern object.
+	 * @throws TDbException if opening fails.
+	 */
+	public function setWriteConcern(WriteConcern $writeConcern): void
+	{
+		/*if (!$this->_active) {
+			// * @throws TDbException if the connection is not active.
+			throw new TDbException('mongoconnection_connection_inactive');
+		}*/
+		$driverOptions = array_merge($this->_driverOptions, ['writeConcern' => $writeConcern]);
+		$this->close();
+		$this->_driverOptions = $driverOptions;
+		$this->open();
+	}
+
+	/**
+	 * Returns the Manager's ReadPreference for queries and commands.
+	 * @throws TDbException if the connection is not active.
+	 * @return ReadPreference the ReadPreference object.
+	 */
+	public function getReadPreference(): ReadPreference
+	{
+		/*if (!$this->_active) {
+			// * @throws TDbException if the connection is not active.
+			throw new TDbException('mongoconnection_connection_inactive');
+		}*/
+		return $this->_manager->getReadPreference();
+	}
+
+	/**
+	 * Sets the default ReadPreference for queries and commands.
+	 * @param ReadPreference $readPreference the ReadPreference object.
+	 * @throws TDbException if opening fails.
+	 */
+	public function setReadPreference(ReadPreference $readPreference): void
+	{
+		/*if (!$this->_active) {
+			// * @throws TDbException if the connection is not active.
+			throw new TDbException('mongoconnection_connection_inactive');
+		}*/
+		$driverOptions = array_merge($this->_driverOptions, ['readPreference' => $readPreference]);
+		$this->close();
+		$this->_driverOptions = $driverOptions;
+		$this->open();
+	}
+
+	/**
+	 * Returns the encryptedFieldsMap for client-side field level encryption.
+	 * @throws TDbException if the connection is not active.
+	 * @return null|array|object the encryptedFieldsMap.
+	 */
+	public function getEncryptedFieldsMap(): array|object|null
+	{
+		/*if (!$this->_active) {
+			// * @throws TDbException if the connection is not active.
+			throw new TDbException('mongoconnection_connection_inactive');
+		}*/
+		return $this->_manager->getEncryptedFieldsMap();
+	}
+
+	/**
+	 * Returns the servers to which this Manager is connected.
+	 *
+	 * Note: since connections are created lazily, this may return an empty array
+	 * if called before executing an operation on the Manager.
+	 *
+	 * @throws TDbException if the connection is not active.
+	 * @return array an array of Server objects.
+	 */
+	public function getServers(): array
+	{
+		/*if (!$this->_active) {
+			// * @throws TDbException if the connection is not active.
+			throw new TDbException('mongoconnection_connection_inactive');
+		}*/
+		return $this->_manager->getServers();
+	}
+
+	/**
+	 * Returns information about the MongoDB server.
+	 *
+	 * This is analogous to the PDO::ATTR_SERVER_INFO attribute and provides
+	 * details about the connected server such as the server version, maxWireVersion,
+	 * and other topology information.
+	 *
+	 * @throws TDbException if the connection is not active.
+	 * @return array server information array.
+	 */
+	public function getServerInfo(): array
+	{
+		$command = new \MongoDB\Driver\Command(['buildInfo' => 1]);
+		$cursor = $this->getManager()->executeCommand($this->_databaseName ?: 'admin', $command);
+		$cursor->setTypeMap(['root' => 'array', 'document' => 'array', 'array' => 'array']);
+		$info = current($cursor->toArray());
+		return $info ?? [];
+	}
+
+	/**
+	 * Returns the Manager instance.
+	 *
+	 * This is analogous to {@see TDbConnection::getPdoInstance()} and provides
+	 * direct access to the underlying MongoDB Driver Manager.
+	 *
+	 * @throws TDbException if the connection is not active.
+	 * @return Manager the MongoDB Driver Manager instance.
+	 */
+	public function getManagerInstance(): Manager
+	{
+		if (!$this->_active) {
+			throw new TDbException('mongoconnection_connection_inactive');
+		}
+		return $this->_manager;
+	}
+
+	/**
 	 * @return string name of the DB driver
 	 */
 	public function getDriverName()
 	{
-		return 'mongo';
+		return self::DRIVER_NAME;
 	}
 }
