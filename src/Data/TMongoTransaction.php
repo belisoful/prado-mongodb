@@ -11,6 +11,7 @@
 namespace Prado\Data;
 
 use MongoDB\Driver\Session;
+use Prado\Data\Common\Mongo\TMongoMetaData;
 use Prado\Exceptions\TDbException;
 use Prado\TPropertyValue;
 
@@ -72,6 +73,7 @@ class TMongoTransaction extends \Prado\TComponent implements IDataTransaction
 	{
 		if ($this->_active && $this->_connection->getActive()) {
 			$this->_session->commitTransaction();
+			$this->_session->endSession();
 			$this->_active = false;
 		} else {
 			throw new TDbException('mongotransaction_inactive');
@@ -86,6 +88,7 @@ class TMongoTransaction extends \Prado\TComponent implements IDataTransaction
 	{
 		if ($this->_active && $this->_connection->getActive()) {
 			$this->_session->abortTransaction();
+			$this->_session->endSession();
 			$this->_active = false;
 		} else {
 			throw new TDbException('mongotransaction_inactive');
@@ -116,5 +119,75 @@ class TMongoTransaction extends \Prado\TComponent implements IDataTransaction
 	public function getSession(): Session
 	{
 		return $this->_session;
+	}
+
+	// -----------------------------------------------------------------------
+	// IDataTransaction — additional required methods
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Creates a command for the given collection on this transaction's connection.
+	 *
+	 * Convenience shorthand for `$transaction->getConnection()->createCommand($collection)`.
+	 *
+	 * @param mixed $collection the collection name.
+	 * @return TMongoCommand the new command object.
+	 */
+	public function createCommand($collection): TMongoCommand
+	{
+		return $this->_connection->createCommand($collection);
+	}
+
+	/**
+	 * Returns the metadata helper for this transaction's connection.
+	 *
+	 * Convenience shorthand for `$transaction->getConnection()->getDbMetaData()`.
+	 *
+	 * @return TMongoMetaData the metadata helper.
+	 */
+	public function getDbMetaData(): TMongoMetaData
+	{
+		return $this->_connection->getDbMetaData();
+	}
+
+	/**
+	 * Starts a new transaction on this transaction's connection, reactivating
+	 * this transaction object for a new work unit.
+	 *
+	 * Allows a single {@see TMongoTransaction} instance to span multiple sequential
+	 * work units without allocating a new object each time:
+	 *
+	 * ```php
+	 * $tx = $conn->beginTransaction();
+	 * $tx->commit();
+	 * // ...
+	 * $tx->beginTransaction(); // reuse the same object
+	 * $tx->commit();
+	 * ```
+	 *
+	 * **Supersession guard:** {@see TMongoConnection::beginTransaction()} always
+	 * allocates a **new** transaction object.  If it was called after this
+	 * transaction completed, this object is superseded — the connection now owns
+	 * a newer transaction.  Calling {@see beginTransaction()} on a superseded
+	 * object throws a {@see TDbException}.
+	 *
+	 * @throws TDbException if already active, if the connection is not active,
+	 *   or if this transaction has been superseded by a newer one.
+	 * @return static
+	 */
+	public function beginTransaction(): static
+	{
+		if ($this->_active) {
+			throw new TDbException('dbconnection_active_transaction');
+		}
+		if (!$this->_connection->getActive()) {
+			throw new TDbException('mongoconnection_connection_inactive');
+		}
+		if ($this->_connection->getLastTransaction() !== $this) {
+			throw new TDbException('dbtransaction_transaction_superseded');
+		}
+		$this->_session->startTransaction();
+		$this->_active = true;
+		return $this;
 	}
 }

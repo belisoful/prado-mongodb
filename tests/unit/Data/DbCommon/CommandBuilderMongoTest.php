@@ -348,10 +348,148 @@ class CommandBuilderMongoTest extends PHPUnit\Framework\TestCase
 
 	public function test_create_find_command_with_options()
 	{
+		// Use the MongoDB-native helper when passing a raw options array.
 		$builder = $this->makeBuilder();
 		$options = ['sort' => ['name' => 1], 'limit' => 10];
-		$cmd = $builder->createFindCommand([], $options);
+		$cmd = $builder->createFindCommandMongo([], $options);
 		$this->assertEquals(TMongoCommand::OP_FIND, $cmd->getOperation());
 		$this->assertEquals($options, $cmd->getOptions());
+	}
+
+	// -----------------------------------------------------------------------
+	// SQL-centric IDataCommandBuilder interface methods
+	// -----------------------------------------------------------------------
+
+	public function test_create_find_command_sql_ordering_and_limit()
+	{
+		$builder = $this->makeBuilder();
+		// SQL-centric call: $where array, $parameters empty, ordering, limit, offset.
+		$cmd = $builder->createFindCommand(['active' => true], [], ['name' => 'asc', 'age' => 'desc'], 5, 10);
+		$this->assertInstanceOf(TMongoCommand::class, $cmd);
+		$this->assertEquals(TMongoCommand::OP_FIND, $cmd->getOperation());
+		$this->assertEquals(['active' => true], $cmd->getFilter());
+		$opts = $cmd->getOptions();
+		$this->assertEquals(['name' => 1, 'age' => -1], $opts['sort']);
+		$this->assertEquals(5, $opts['limit']);
+		$this->assertEquals(10, $opts['skip']);
+	}
+
+	public function test_create_find_command_parameters_merged_into_filter()
+	{
+		$builder = $this->makeBuilder();
+		$cmd = $builder->createFindCommand(['status' => 'active'], ['role' => 'admin']);
+		$this->assertEquals(['status' => 'active', 'role' => 'admin'], $cmd->getFilter());
+	}
+
+	public function test_create_find_command_sentinel_where_means_no_filter()
+	{
+		$builder = $this->makeBuilder();
+		$cmd = $builder->createFindCommand('1=1');
+		$this->assertEquals([], $cmd->getFilter());
+	}
+
+	public function test_create_count_command_sql_interface()
+	{
+		$builder = $this->makeBuilder();
+		$cmd = $builder->createCountCommand('1=1');
+		$this->assertEquals(TMongoCommand::OP_COUNT, $cmd->getOperation());
+		$this->assertEquals([], $cmd->getFilter());
+	}
+
+	public function test_create_insert_command_maps_to_insert_one()
+	{
+		$builder = $this->makeBuilder();
+		$doc = ['name' => 'test', 'age' => 30];
+		$cmd = $builder->createInsertCommand($doc);
+		$this->assertEquals(TMongoCommand::OP_INSERT_ONE, $cmd->getOperation());
+		$this->assertEquals($doc, $cmd->getDocument());
+	}
+
+	public function test_create_insert_or_ignore_command_uses_upsert()
+	{
+		$builder = $this->makeBuilder();
+		$doc = ['_id' => 'abc123', 'name' => 'test'];
+		$cmd = $builder->createInsertOrIgnoreCommand($doc);
+		$this->assertEquals(TMongoCommand::OP_UPDATE_ONE, $cmd->getOperation());
+		$this->assertEquals(['_id' => 'abc123'], $cmd->getFilter());
+		$update = $cmd->getUpdate();
+		$this->assertArrayHasKey('$setOnInsert', $update);
+		$opts = $cmd->getOptions();
+		$this->assertTrue($opts['upsert']);
+	}
+
+	public function test_create_upsert_command()
+	{
+		$builder = $this->makeBuilder();
+		$doc = ['_id' => 'x1', 'name' => 'Alice', 'age' => 30];
+		$cmd = $builder->createUpsertCommand($doc);
+		$this->assertEquals(TMongoCommand::OP_UPDATE_ONE, $cmd->getOperation());
+		$this->assertEquals(['_id' => 'x1'], $cmd->getFilter());
+		$this->assertEquals(['$set' => ['name' => 'Alice', 'age' => 30]], $cmd->getUpdate());
+		$this->assertTrue($cmd->getOptions()['upsert']);
+	}
+
+	public function test_create_upsert_command_with_conflict_columns()
+	{
+		$builder = $this->makeBuilder();
+		$doc = ['email' => 'a@example.com', 'name' => 'Alice'];
+		$cmd = $builder->createUpsertCommand($doc, null, ['email']);
+		$this->assertEquals(['email' => 'a@example.com'], $cmd->getFilter());
+	}
+
+	public function test_create_update_command_wraps_data_in_set()
+	{
+		$builder = $this->makeBuilder();
+		$cmd = $builder->createUpdateCommand(['name' => 'Bob'], ['status' => 'active']);
+		$this->assertEquals(TMongoCommand::OP_UPDATE_MANY, $cmd->getOperation());
+		$this->assertEquals(['status' => 'active'], $cmd->getFilter());
+		$this->assertEquals(['$set' => ['name' => 'Bob']], $cmd->getUpdate());
+	}
+
+	public function test_create_delete_command()
+	{
+		$builder = $this->makeBuilder();
+		$cmd = $builder->createDeleteCommand(['status' => 'inactive']);
+		$this->assertEquals(TMongoCommand::OP_DELETE_MANY, $cmd->getOperation());
+		$this->assertEquals(['status' => 'inactive'], $cmd->getFilter());
+	}
+
+	public function test_apply_limit_offset_is_noop()
+	{
+		$builder = $this->makeBuilder();
+		$sql = 'SELECT * FROM users';
+		$result = $builder->applyLimitOffset($sql, 10, 5);
+		$this->assertEquals($sql, $result, 'applyLimitOffset is a no-op for MongoDB');
+	}
+
+	public function test_apply_ordering_is_noop()
+	{
+		$builder = $this->makeBuilder();
+		$sql = 'SELECT * FROM users';
+		$result = $builder->applyOrdering($sql, ['name' => 'asc']);
+		$this->assertEquals($sql, $result, 'applyOrdering is a no-op for MongoDB');
+	}
+
+	public function test_get_search_expression_returns_json()
+	{
+		$builder = $this->makeBuilder();
+		$expr = $builder->getSearchExpression(['name'], 'alice');
+		$this->assertIsString($expr);
+		$decoded = json_decode($expr, true);
+		$this->assertArrayHasKey('$or', $decoded);
+	}
+
+	public function test_get_last_insert_id_starts_null()
+	{
+		$builder = $this->makeBuilder();
+		$this->assertNull($builder->getLastInsertID());
+	}
+
+	public function test_apply_criterias_returns_find_command()
+	{
+		$builder = $this->makeBuilder();
+		$cmd = $builder->applyCriterias(['active' => true], [], ['name' => 'asc'], 5, 0);
+		$this->assertInstanceOf(TMongoCommand::class, $cmd);
+		$this->assertEquals(TMongoCommand::OP_FIND, $cmd->getOperation());
 	}
 }

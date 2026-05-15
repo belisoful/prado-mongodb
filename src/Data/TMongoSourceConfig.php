@@ -1,78 +1,89 @@
 <?php
 
 /**
- * TDataSourceConfig class file.
+ * TMongoSourceConfig class file.
  *
- * @author Wei Zhuo <weizhuo[at]gmail[dot]com>
+ * @author Brad Anderson <belisoful@icloud.com>
  * @link https://github.com/pradosoft/prado
  * @license https://github.com/pradosoft/prado/blob/master/LICENSE
  */
 
 namespace Prado\Data;
 
-use Prado\Data\TMongoConnection;
+use Prado\Data\ActiveRecord\Scaffold\InputBuilder\TMongoScaffoldInput;
+use Prado\Data\Common\Mongo\TMongoMetaData;
 use Prado\Exceptions\TConfigurationException;
-use Prado\Prado;
-use Prado\TApplication;
 
 /**
- * TDataSourceConfig module class provides <module> configuration for database connections.
+ * TMongoSourceConfig module class provides `<module>` configuration for
+ * MongoDB connections in a PRADO application.
  *
- * Example usage: mysql connection
- * ```php
+ * Example usage in application.xml:
+ * ```xml
  * <modules>
- * 	<module id="db1">
- * 		<database ConnectionString="mysqli:host=localhost;dbname=test"
- * 			username="dbuser" password="dbpass" />
- * 	</module>
+ *     <module id="mongodb" class="Prado\Data\TMongoSourceConfig">
+ *         <database ConnectionString="mongodb://localhost:27017"
+ *             DatabaseName="mydb" />
+ *     </module>
  * </modules>
  * ```
  *
- * Usage in php:
+ * Usage in PHP:
  * ```php
- * class Home extends TPage
- * {
- * 		function onLoad($param)
- * 		{
- * 			$db = $this->Application->Modules['db1']->DbConnection;
- * 			$db->createCommand('...'); //...
- * 		}
- * }
+ * $conn = $this->Application->Modules['mongodb']->DbConnection;
+ * $conn->createCommand('users')->findMany(['active' => true]);
  * ```
  *
- * The properties of <connection> are those of the class TDbConnection.
- * Set {@see setConnectionClass} attribute for a custom database connection class
- * that extends the TDbConnection class.
+ * The default connection class is set to {@see TMongoConnection}.
+ * Set {@see setConnectionClass} to supply a custom subclass.
+ *
+ * This module also registers two global event handlers so that PRADO
+ * framework components that are unaware of MongoDB can discover the correct
+ * metadata and scaffold input builder for a MongoDB connection:
+ *
+ * - **fxDataGetMetaDataInstance** — returns a {@see TMongoMetaData} when the
+ *   framework's metadata factory cannot find a built-in driver handler.
+ * - **fxActiveRecordCreateScaffoldInput** — returns a
+ *   {@see TMongoScaffoldInput} for scaffold generation against a MongoDB
+ *   connection.
  *
  * @author Brad Anderson <belisoful@icloud.com>
- * @since 3.1
+ * @since 1.0.0
  */
 class TMongoSourceConfig extends \Prado\Data\TDataSourceConfig
 {
-	private static bool $_installed;
-
-	public function dyPreInit($config)
+	/**
+	 * Initialises the module and sets the default connection class to
+	 * {@see TMongoConnection} before the parent reads the XML configuration.
+	 *
+	 * @param mixed $config the XML configuration element (unused here).
+	 */
+	public function dyPreInit($config): void
 	{
 		parent::setConnectionClass(TMongoConnection::class);
 	}
 
-
 	/**
-	 * Alias for getDbConnection().
-	 * @return \Prado\Data\TDbConnection database connection.
+	 * Alias for {@see getDbConnection()}.
+	 *
+	 * @return TMongoConnection the MongoDB connection instance.
 	 */
-	public function getDatabase()
+	public function getDatabase(): TMongoConnection
 	{
 		return $this->getDbConnection();
 	}
 
 	/**
-	 * Finds the database connection instance from the Application modules.
-	 * @param string $id Database connection module ID.
-	 * @throws TConfigurationException when module is not of TDbConnection or TDataSourceConfig.
-	 * @return \Prado\Data\TDbConnection database connection.
+	 * Resolves a MongoDB connection from a module ID.
+	 *
+	 * Looks up the module and returns a {@see TMongoConnection} either
+	 * directly or via its {@see TDataSourceConfig::getDbConnection()} accessor.
+	 *
+	 * @param string $id the application module ID.
+	 * @throws TConfigurationException if the module is not a valid MongoDB connection.
+	 * @return TMongoConnection the resolved connection.
 	 */
-	protected function findConnectionByID($id)
+	protected function findConnectionByID(string $id): TMongoConnection
 	{
 		$conn = $this->getApplication()->getModule($id);
 		if ($conn instanceof TDataSourceConfig) {
@@ -80,43 +91,50 @@ class TMongoSourceConfig extends \Prado\Data\TDataSourceConfig
 		}
 		if ($conn instanceof TMongoConnection) {
 			return $conn;
-		} else {
-			throw new TConfigurationException('datasource_dbconnection_invalid', $id);
 		}
+		throw new TConfigurationException('datasource_dbconnection_invalid', $id);
 	}
 
 	/**
-	 * if {@see TDbMetaData::getInstance()} cannot find a driver it raises this
-	 * global event to find the TDbMetaData for the IDbConnection in $param
-	 * @param string $sender the static class raising this event.
-	 * @param IDataConnection|mixed $param
-	 * @return ?TDbMetaData
+	 * Global event handler — provides a {@see TMongoMetaData} instance when
+	 * the PRADO framework's metadata factory cannot find a driver handler.
+	 *
+	 * Raised as `fxDataGetMetaDataInstance` on the application event bus.
+	 * Returns null for non-MongoDB connections, allowing other handlers to run.
+	 *
+	 * @param string $sender the static class raising the event.
+	 * @param IDataConnection|mixed $param the connection whose metadata is needed.
+	 * @return TMongoMetaData|null the metadata instance, or null if not applicable.
 	 */
-	public function fxDataGetMetaDataInstance($sender, $param)
+	public function fxDataGetMetaDataInstance(string $sender, mixed $param): ?TMongoMetaData
 	{
 		if (!($param instanceof IDataConnection)) {
 			return null;
 		}
-		if (strtolower($param->getDriverName()) !== 'mongo') {
+		if (strtolower($param->getDriverName()) !== TMongoConnection::DRIVER_NAME) {
 			return null;
 		}
 		return new TMongoMetaData($param);
 	}
 
 	/**
-	 * if {@see TScaffoldInputBase::createInputBuilder()} cannot find a driver
-	 * it raises this global event to find the TDbMetaData for the IDbConnection
-	 * in $param
-	 * @param mixed $sender
-	 * @param IDataConnection $param
-	 * @return ?TScaffoldInputBase
+	 * Global event handler — provides a {@see TMongoScaffoldInput} when the
+	 * PRADO ActiveRecord scaffold system cannot find a built-in input builder
+	 * for a MongoDB connection.
+	 *
+	 * Raised as `fxActiveRecordCreateScaffoldInput` on the application event bus.
+	 * Returns null for non-MongoDB connections.
+	 *
+	 * @param mixed $sender the object raising the event.
+	 * @param IDataConnection|mixed $param the connection being scaffolded.
+	 * @return TMongoScaffoldInput|null the scaffold input builder, or null if not applicable.
 	 */
-	public function fxActiveRecordCreateScaffoldInput($sender, $param)
+	public function fxActiveRecordCreateScaffoldInput(mixed $sender, mixed $param): ?TMongoScaffoldInput
 	{
 		if (!($param instanceof IDataConnection)) {
 			return null;
 		}
-		if (strtolower($param->getDriverName()) !== 'mongo') {
+		if (strtolower($param->getDriverName()) !== TMongoConnection::DRIVER_NAME) {
 			return null;
 		}
 		return new TMongoScaffoldInput();

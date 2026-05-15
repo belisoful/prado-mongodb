@@ -31,7 +31,7 @@ use Prado\Exceptions\TDbException;
  * @author Brad Anderson <belisoful@icloud.com>
  * @since 1.0.0
  */
-class TMongoMetaData extends \Prado\TComponent
+class TMongoMetaData extends \Prado\TComponent implements \Prado\Data\Common\IDataMetaData
 {
 	private TMongoConnection $_connection;
 
@@ -51,9 +51,80 @@ class TMongoMetaData extends \Prado\TComponent
 	/**
 	 * @return TMongoConnection the connection this metadata object introspects.
 	 */
-	public function getDbConnection(): TMongoConnection
+	public function getDbConnection()
 	{
 		return $this->_connection;
+	}
+
+	/**
+	 * Retrieves metadata for a specific collection.
+	 * @param null|string $collectionName the collection name. If null, returns metadata for the current database.
+	 * @return TMongoCollectionInfo the collection metadata.
+	 */
+	public function getTableInfo($collectionName = null)
+	{
+		if ($collectionName === null) {
+			// For MongoDB, when no collection is specified, we return info about the first collection
+			$collections = $this->findCollectionNames();
+			if (empty($collections)) {
+				throw new \Prado\Exceptions\TDbException('mongometadata_no_collections');
+			}
+			$collectionName = $collections[0];
+		}
+		return $this->getCollectionInfo($collectionName);
+	}
+
+	/**
+	 * Creates a command builder for performing CRUD operations on a specific collection.
+	 * @param null|string $collectionName the collection name.
+	 * @return TMongoCommandBuilder the command builder instance for the given collection.
+	 */
+	public function createCommandBuilder($collectionName = null)
+	{
+		return $this->getCollectionInfo($collectionName)->createCommandBuilder($this->_connection);
+	}
+
+	/**
+	 * Quotes a collection name for use in MongoDB queries.
+	 * MongoDB doesn't require quoting, so we return the name as-is.
+	 * @param string $name the collection name to quote.
+	 * @return string the collection name.
+	 */
+	public function quoteTableName($name)
+	{
+		return $name;
+	}
+
+	/**
+	 * Quotes a field name for use in MongoDB queries.
+	 * MongoDB doesn't require quoting, so we return the name as-is.
+	 * @param string $name the field name to quote.
+	 * @return string the field name.
+	 */
+	public function quoteColumnName($name)
+	{
+		return $name;
+	}
+
+	/**
+	 * Quotes a field alias for use in MongoDB queries.
+	 * MongoDB doesn't require quoting, so we return the name as-is.
+	 * @param string $name the field alias to quote.
+	 * @return string the field alias.
+	 */
+	public function quoteColumnAlias($name)
+	{
+		return $name;
+	}
+
+	/**
+	 * Returns all collection names in the configured database.
+	 * @param string $schema the schema name. Not used in MongoDB.
+	 * @return string[] the collection names.
+	 */
+	public function findTableNames($schema = '')
+	{
+		return $this->findCollectionNames();
 	}
 
 	/**
@@ -257,13 +328,4 @@ class TMongoMetaData extends \Prado\TComponent
 		return $names;
 	}
 
-	/**
-	 * Creates a command builder for the given collection.
-	 * @param string $collectionName the collection name.
-	 * @return TMongoCommandBuilder a new command builder.
-	 */
-	public function createCommandBuilder(string $collectionName = ''): TMongoCommandBuilder
-	{
-		return $this->getCollectionInfo($collectionName)->createCommandBuilder($this->_connection);
-	}
 }

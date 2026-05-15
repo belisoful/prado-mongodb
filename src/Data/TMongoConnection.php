@@ -129,10 +129,6 @@ class TMongoConnection extends \Prado\TComponent implements IDataConnection
 	 */
 	public function getManager(): ?Manager
 	{
-		/*	if (!$this->_active) {
-			// * @ throws TDbException if the connection is not active.
-				throw new TDbException('mongoconnection_connection_inactive');
-			}*/
 		return $this->_manager;
 	}
 
@@ -338,10 +334,6 @@ class TMongoConnection extends \Prado\TComponent implements IDataConnection
 	 */
 	public function createCommand($collection): TMongoCommand
 	{
-		/*	if (!$this->_active) {
-			// * @ throws TDbException if the connection is not active.
-				throw new TDbException('mongoconnection_connection_inactive');
-			}*/
 		return new TMongoCommand($this, (string) $collection);
 	}
 
@@ -378,6 +370,54 @@ class TMongoConnection extends \Prado\TComponent implements IDataConnection
 	}
 
 	/**
+	 * Returns the last {@see TMongoTransaction} object associated with this
+	 * connection, whether or not it is still active.
+	 *
+	 * Used by the supersession guard in {@see TMongoTransaction::beginTransaction()}
+	 * to detect whether this transaction object has been replaced by a newer one.
+	 *
+	 * @return null|TMongoTransaction the last transaction, or null if none was started.
+	 */
+	public function getLastTransaction(): ?IDataTransaction
+	{
+		return $this->_transaction;
+	}
+
+	/**
+	 * Commits the currently active transaction on this connection.
+	 *
+	 * A convenience wrapper for callers that do not hold a reference to the
+	 * transaction object.  Returns false (no-op) when no transaction is active.
+	 *
+	 * @return ?bool true if a transaction was committed, false if none was active.
+	 */
+	public function commit(): ?bool
+	{
+		if ($this->_transaction !== null && $this->_transaction->getActive()) {
+			$this->_transaction->commit();
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Rolls back the currently active transaction on this connection.
+	 *
+	 * A convenience wrapper for callers that do not hold a reference to the
+	 * transaction object.  Returns false (no-op) when no transaction is active.
+	 *
+	 * @return ?bool true if a transaction was rolled back, false if none was active.
+	 */
+	public function rollback(): ?bool
+	{
+		if ($this->_transaction !== null && $this->_transaction->getActive()) {
+			$this->_transaction->rollback();
+			return true;
+		}
+		return false;
+	}
+
+	/**
 	 * Returns metadata (collection schemas, indexes) for the connected database.
 	 * @return TMongoMetaData the metadata helper for this connection.
 	 */
@@ -411,10 +451,6 @@ class TMongoConnection extends \Prado\TComponent implements IDataConnection
 	 */
 	public function getReadConcern(): ReadConcern
 	{
-		/*if (!$this->_active) {
-			// * @throws TDbException if the connection is not active.
-			throw new TDbException('mongoconnection_connection_inactive');
-		}*/
 		return $this->_manager->getReadConcern();
 	}
 
@@ -425,10 +461,6 @@ class TMongoConnection extends \Prado\TComponent implements IDataConnection
 	 */
 	public function setReadConcern(ReadConcern $readConcern): void
 	{
-		/*if (!$this->_active) {
-			// * @throws TDbException if the connection is not active.
-			throw new TDbException('mongoconnection_connection_inactive');
-		}*/
 		$driverOptions = array_merge($this->_driverOptions, ['readConcern' => $readConcern]);
 		$this->close();
 		$this->_driverOptions = $driverOptions;
@@ -442,10 +474,6 @@ class TMongoConnection extends \Prado\TComponent implements IDataConnection
 	 */
 	public function getWriteConcern(): WriteConcern
 	{
-		/*if (!$this->_active) {
-			// * @throws TDbException if the connection is not active.
-			throw new TDbException('mongoconnection_connection_inactive');
-		}*/
 		return $this->_manager->getWriteConcern();
 	}
 
@@ -456,10 +484,6 @@ class TMongoConnection extends \Prado\TComponent implements IDataConnection
 	 */
 	public function setWriteConcern(WriteConcern $writeConcern): void
 	{
-		/*if (!$this->_active) {
-			// * @throws TDbException if the connection is not active.
-			throw new TDbException('mongoconnection_connection_inactive');
-		}*/
 		$driverOptions = array_merge($this->_driverOptions, ['writeConcern' => $writeConcern]);
 		$this->close();
 		$this->_driverOptions = $driverOptions;
@@ -473,10 +497,6 @@ class TMongoConnection extends \Prado\TComponent implements IDataConnection
 	 */
 	public function getReadPreference(): ReadPreference
 	{
-		/*if (!$this->_active) {
-			// * @throws TDbException if the connection is not active.
-			throw new TDbException('mongoconnection_connection_inactive');
-		}*/
 		return $this->_manager->getReadPreference();
 	}
 
@@ -487,10 +507,6 @@ class TMongoConnection extends \Prado\TComponent implements IDataConnection
 	 */
 	public function setReadPreference(ReadPreference $readPreference): void
 	{
-		/*if (!$this->_active) {
-			// * @throws TDbException if the connection is not active.
-			throw new TDbException('mongoconnection_connection_inactive');
-		}*/
 		$driverOptions = array_merge($this->_driverOptions, ['readPreference' => $readPreference]);
 		$this->close();
 		$this->_driverOptions = $driverOptions;
@@ -504,10 +520,6 @@ class TMongoConnection extends \Prado\TComponent implements IDataConnection
 	 */
 	public function getEncryptedFieldsMap(): array|object|null
 	{
-		/*if (!$this->_active) {
-			// * @throws TDbException if the connection is not active.
-			throw new TDbException('mongoconnection_connection_inactive');
-		}*/
 		return $this->_manager->getEncryptedFieldsMap();
 	}
 
@@ -522,10 +534,6 @@ class TMongoConnection extends \Prado\TComponent implements IDataConnection
 	 */
 	public function getServers(): array
 	{
-		/*if (!$this->_active) {
-			// * @throws TDbException if the connection is not active.
-			throw new TDbException('mongoconnection_connection_inactive');
-		}*/
 		return $this->_manager->getServers();
 	}
 

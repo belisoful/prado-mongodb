@@ -6,3 +6,4 @@ mongoconnection_extension_required		= The MongoDB PHP extension (ext-mongodb) is
 mongocommand_execute_failed				= TMongoCommand failed to execute: {0}
 mongocommand_query_failed				= TMongoCommand failed to execute the query: {0}
 mongotransaction_inactive				= TMongoTransaction is inactive.
+mongometadata_no_collections			= No collections found in database.

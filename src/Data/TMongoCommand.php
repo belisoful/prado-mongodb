@@ -13,6 +13,7 @@ namespace Prado\Data;
 use MongoDB\Driver\BulkWrite;
 use MongoDB\Driver\Command;
 use MongoDB\Driver\Query;
+use Prado\Data\IDataCommand;
 use Prado\Exceptions\TDbException;
 
 /**

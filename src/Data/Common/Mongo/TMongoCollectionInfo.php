@@ -10,7 +10,9 @@
 
 namespace Prado\Data\Common\Mongo;
 
-use Prado\Data\TMongoConnection;
+use Prado\Data\IDataConnection;
+use Prado\Data\Common\IDataTableInfo;
+use Prado\Data\Common\IDataCommandBuilder;
 
 /**
  * TMongoCollectionInfo provides schema and index metadata for a MongoDB collection.
@@ -26,7 +28,7 @@ use Prado\Data\TMongoConnection;
  * @author Brad Anderson <belisoful@icloud.com>
  * @since 1.0.0
  */
-class TMongoCollectionInfo extends \Prado\TComponent
+class TMongoCollectionInfo extends \Prado\TComponent implements \Prado\Data\Common\IDataTableInfo
 {
 	private string $_collectionName;
 
@@ -64,6 +66,35 @@ class TMongoCollectionInfo extends \Prado\TComponent
 	}
 
 	/**
+	 * @return string the unqualified collection name.
+	 */
+	public function getTableName(): string
+	{
+		return $this->_collectionName;
+	}
+
+	/**
+	 * Returns the fully-qualified collection name.
+	 *
+	 * MongoDB has no schema prefix (unlike SQL schemas), so this returns the
+	 * same value as {@see getTableName}.
+	 *
+	 * @return string the collection name.
+	 */
+	public function getTableFullName(): string
+	{
+		return $this->_collectionName;
+	}
+
+	/**
+	 * @return bool always false — MongoDB collections are not views.
+	 */
+	public function getIsView(): bool
+	{
+		return false;
+	}
+
+	/**
 	 * Returns all known fields, keyed by field name.
 	 *
 	 * Fields are derived from the collection's JSON Schema validator. If no
@@ -81,18 +112,87 @@ class TMongoCollectionInfo extends \Prado\TComponent
 	 * @param string $name the field name.
 	 * @return null|TMongoFieldInfo the field info, or null.
 	 */
-	public function getField(string $name): ?TMongoFieldInfo
+	public function getField($name): ?TMongoFieldInfo
 	{
 		return $this->_fields[$name] ?? null;
 	}
 
 	/**
 	 * Returns the field names defined in the schema.
-	 * @return array the field names.
+	 * @return string[] the field names.
 	 */
 	public function getFieldNames(): array
 	{
 		return array_keys($this->_fields);
+	}
+
+	// -----------------------------------------------------------------------
+	// IDataTableInfo — SQL-style column aliases (map to MongoDB field concepts)
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Returns all field info objects keyed by field name.
+	 *
+	 * Alias for {@see getFields} that satisfies the SQL-centric
+	 * {@see IDataTableInfo::getColumns()} contract.
+	 *
+	 * @return TMongoFieldInfo[] the field info objects.
+	 */
+	public function getColumns(): array
+	{
+		return $this->_fields;
+	}
+
+	/**
+	 * Returns the field info for a specific field, or null if not found.
+	 *
+	 * Alias for {@see getField} that satisfies the SQL-centric
+	 * {@see IDataTableInfo::getColumn()} contract.
+	 *
+	 * @param string $name the field name.
+	 * @return null|TMongoFieldInfo the field info, or null.
+	 */
+	public function getColumn($name): ?TMongoFieldInfo
+	{
+		return $this->_fields[$name] ?? null;
+	}
+
+	/**
+	 * Returns the names of all fields known for this collection.
+	 *
+	 * Alias for {@see getFieldNames} that satisfies the SQL-centric
+	 * {@see IDataTableInfo::getColumnNames()} contract.
+	 *
+	 * @return string[] the field names.
+	 */
+	public function getColumnNames(): array
+	{
+		return array_keys($this->_fields);
+	}
+
+	/**
+	 * Returns the primary-key field names.
+	 *
+	 * MongoDB always uses `_id` as its implicit primary key.
+	 *
+	 * @return string[] always `['_id']`.
+	 */
+	public function getPrimaryKeys(): array
+	{
+		return ['_id'];
+	}
+
+	/**
+	 * Returns foreign-key descriptors.
+	 *
+	 * MongoDB does not enforce foreign-key relationships at the database level,
+	 * so this always returns an empty array.
+	 *
+	 * @return array always `[]`.
+	 */
+	public function getForeignKeys(): array
+	{
+		return [];
 	}
 
 	/**
@@ -117,10 +217,10 @@ class TMongoCollectionInfo extends \Prado\TComponent
 
 	/**
 	 * Creates a command builder for this collection.
-	 * @param TMongoConnection $connection the connection to use.
-	 * @return TMongoCommandBuilder a new command builder.
+	 * @param IDataConnection $connection the connection to use.
+	 * @return IDataCommandBuilder a new command builder.
 	 */
-	public function createCommandBuilder(TMongoConnection $connection): TMongoCommandBuilder
+	public function createCommandBuilder(IDataConnection $connection): IDataCommandBuilder
 	{
 		return new TMongoCommandBuilder($connection, $this);
 	}
