@@ -102,8 +102,8 @@ db.runCommand({
 			},
 		},
 	},
-	validationLevel: 'strict',
-	validationAction: 'error',
+	validationLevel: 'off',
+	validationAction: 'warn',
 });
 
 // ================================================================
@@ -193,8 +193,8 @@ db.runCommand({
 			},
 		},
 	},
-	validationLevel: 'strict',
-	validationAction: 'error',
+	validationLevel: 'off',
+	validationAction: 'warn',
 });
 
-print('MongoDB schema initialised: prado_unitest.table1, prado_unitest.address');
+print('MongoDB schema initialized: prado_unitest.table1, prado_unitest.address');

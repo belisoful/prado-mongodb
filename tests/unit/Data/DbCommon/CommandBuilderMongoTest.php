@@ -479,10 +479,12 @@ class CommandBuilderMongoTest extends PHPUnit\Framework\TestCase
 		$this->assertArrayHasKey('$or', $decoded);
 	}
 
-	public function test_get_last_insert_id_starts_null()
+	public function test_get_last_insert_id_starts_empty()
 	{
+		// Delegates to the connection's last-insert id, which is empty before
+		// any insert — consistent with TDbCommandBuilder/PDO.
 		$builder = $this->makeBuilder();
-		$this->assertNull($builder->getLastInsertID());
+		$this->assertEmpty($builder->getLastInsertID());
 	}
 
 	public function test_apply_criterias_returns_find_command()
@@ -491,5 +493,103 @@ class CommandBuilderMongoTest extends PHPUnit\Framework\TestCase
 		$cmd = $builder->applyCriterias(['active' => true], [], ['name' => 'asc'], 5, 0);
 		$this->assertInstanceOf(TMongoCommand::class, $cmd);
 		$this->assertEquals(TMongoCommand::OP_FIND, $cmd->getOperation());
+	}
+
+	public function test_set_db_connection_repoints_the_builder()
+	{
+		$builder = $this->makeBuilder();
+		$other = new TMongoConnection('mongodb://localhost:27017', '', '', 'other_db');
+		$builder->setDbConnection($other);
+		$this->assertSame($other, $builder->getDbConnection());
+		$this->assertSame($other, $builder->createFindCommand()->getConnection());
+	}
+
+	public function test_json_string_filter_is_decoded()
+	{
+		$builder = $this->makeBuilder();
+		$cmd = $builder->createFindCommand($builder->getSearchExpression(['name'], 'ann'));
+		$this->assertArrayHasKey('$or', $cmd->getFilter());
+	}
+
+	public function test_sql_where_string_is_rejected()
+	{
+		$builder = $this->makeBuilder();
+		$this->expectException(\Prado\Exceptions\TDbException::class);
+		$builder->createDeleteCommand('status = 1');
+	}
+
+	public function test_sql_criteria_condition_is_rejected()
+	{
+		$builder = $this->makeBuilder();
+		$this->expectException(\Prado\Exceptions\TDbException::class);
+		$builder->createDeleteCommandFromCriteria(new \Prado\Data\DataGateway\TSqlCriteria('status = 1'));
+	}
+
+	public function test_empty_sql_criteria_matches_all()
+	{
+		$builder = $this->makeBuilder();
+		$criteria = new \Prado\Data\DataGateway\TSqlCriteria();
+		$criteria->setOrdersBy(['name' => 'desc']);
+		$cmd = $builder->createFindCommandFromCriteria($criteria);
+		$this->assertSame([], $cmd->getFilter());
+		$this->assertSame(['name' => -1], $cmd->getOptions()['sort']);
+	}
+
+	public function test_mongo_criteria_is_a_data_criteria_and_not_a_sql_criteria()
+	{
+		$criteria = new \Prado\Data\DataGateway\TMongoQueryCriteria(['x' => 1]);
+		$this->assertInstanceOf(\Prado\Data\DataGateway\IDataCriteria::class, $criteria);
+		$this->assertNotInstanceOf(\Prado\Data\DataGateway\TSqlCriteria::class, $criteria);
+		$this->assertSame('*', $criteria->getSelect());
+		$this->assertSame(-1, $criteria->getLimit());
+		$this->assertSame(-1, $criteria->getOffset());
+	}
+
+	public function test_mongo_criteria_clone_does_not_share_its_collections()
+	{
+		$criteria = new \Prado\Data\DataGateway\TMongoQueryCriteria(['x' => 1]);
+		$criteria->setOrdersBy(['name' => 'desc']);
+		$copy = clone $criteria;
+		$copy->getOrdersBy()->add('age', 'asc');
+		$copy->getParameters()->add(':a', 1);
+
+		$this->assertSame(['x' => 1], $copy->getFilter());
+		$this->assertSame(['name' => 'desc'], $criteria->getOrdersBy()->toArray());
+		$this->assertSame(['name' => 'desc', 'age' => 'asc'], $copy->getOrdersBy()->toArray());
+		$this->assertSame(0, $criteria->getParameters()->getCount());
+	}
+
+	public function test_mongo_criteria_ordering_from_a_string_and_parameter_validation()
+	{
+		$criteria = new \Prado\Data\DataGateway\TMongoQueryCriteria();
+		$criteria->setOrdersBy('name desc,  age');
+		$this->assertSame(['name' => 'desc', 'age' => 'asc'], $criteria->getOrdersBy()->toArray());
+		$criteria->setParameters([':a' => 1]);
+		$this->assertSame([':a' => 1], $criteria->getParameters()->toArray());
+		$this->expectException(\Prado\Exceptions\TInvalidDataTypeException::class);
+		$criteria->setParameters('not an array');
+	}
+
+	public function test_insert_or_ignore_without_id_assigns_one()
+	{
+		$builder = $this->makeBuilder();
+		$cmd = $builder->createInsertOrIgnoreCommand(['name' => 'test']);
+		$this->assertInstanceOf(\MongoDB\BSON\ObjectId::class, $cmd->getFilter()['_id']);
+		$this->assertSame('test', $cmd->getUpdate()['$setOnInsert']['name']);
+	}
+
+	public function test_upsert_partial_update_inserts_remaining_fields()
+	{
+		$builder = $this->makeBuilder();
+		$cmd = $builder->createUpsertCommand(['email' => 'a@b.c', 'name' => 'A', 'score' => 1], ['score', 'tag' => 'x'], ['email']);
+		$this->assertSame(['email' => 'a@b.c'], $cmd->getFilter());
+		$this->assertSame(['$set' => ['score' => 1, 'tag' => 'x'], '$setOnInsert' => ['name' => 'A']], $cmd->getUpdate());
+	}
+
+	public function test_upsert_empty_update_data_only_inserts()
+	{
+		$builder = $this->makeBuilder();
+		$cmd = $builder->createUpsertCommand(['_id' => 'k', 'name' => 'A'], []);
+		$this->assertSame(['$setOnInsert' => ['name' => 'A']], $cmd->getUpdate());
 	}
 }

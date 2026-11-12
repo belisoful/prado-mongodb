@@ -35,8 +35,6 @@ class TMongoTransactionTest extends PHPUnit\Framework\TestCase
 			self::markTestSkipped('MongoDB is not available: ' . $e->getMessage());
 		}
 
-		$conn->setActive(false);
-
 		$transaction = null;
 		try {
 			$tx = $conn->beginTransaction();
@@ -245,7 +243,10 @@ class TMongoTransactionTest extends PHPUnit\Framework\TestCase
 		}
 
 		$this->assertTrue($exceptionThrown);
-		$this->assertFalse($this->_transaction->getActive());
+		// MongoDB transactions are not auto-aborted by client-side exceptions; the
+		// application must call rollback() explicitly. The transaction remains
+		// active so the caller can decide how to recover.
+		$this->assertTrue($this->_transaction->getActive());
 	}
 
 	// -----------------------------------------------------------------------

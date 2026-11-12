@@ -451,22 +451,29 @@ class TMongoCommand extends \Prado\TComponent implements IDataCommand
 
 			switch ($this->_operation) {
 				case self::OP_INSERT_ONE:
-					$bulk->insert($this->_document);
-					return (int) $this->executeBulk($bulk)->getInsertedCount();
+					$id = $bulk->insert($this->_document);
+					$count = (int) $this->executeBulk($bulk)->getInsertedCount();
+					$this->_connection->setLastInsertID($id);
+					return $count;
 
 				case self::OP_INSERT_MANY:
+					$ids = [];
 					foreach ($this->_documents as $doc) {
-						$bulk->insert($doc);
+						$ids[] = $bulk->insert($doc);
 					}
-					return (int) $this->executeBulk($bulk)->getInsertedCount();
+					$count = (int) $this->executeBulk($bulk)->getInsertedCount();
+					if ($ids !== []) {
+						$this->_connection->setLastInsertID(end($ids));
+					}
+					return $count;
 
 				case self::OP_UPDATE_ONE:
 					$bulk->update($this->_filter, $this->_update, array_merge($this->_options, ['multi' => false]));
-					return (int) $this->executeBulk($bulk)->getModifiedCount();
+					return $this->countUpdated($this->executeBulk($bulk));
 
 				case self::OP_UPDATE_MANY:
 					$bulk->update($this->_filter, $this->_update, array_merge($this->_options, ['multi' => true]));
-					return (int) $this->executeBulk($bulk)->getModifiedCount();
+					return $this->countUpdated($this->executeBulk($bulk));
 
 				case self::OP_DELETE_ONE:
 					$bulk->delete($this->_filter, ['limit' => 1]);
@@ -484,6 +491,26 @@ class TMongoCommand extends \Prado\TComponent implements IDataCommand
 		} catch (\Exception $e) {
 			throw new TDbException('mongocommand_execute_failed', $e->getMessage());
 		}
+	}
+
+	/**
+	 * Counts the documents an update affected: the modified documents plus any
+	 * document an upsert inserted.  The `_id` of an upserted document is recorded
+	 * on the connection, as an insert does, so
+	 * {@see \Prado\Data\DataGateway\TDataGatewayCommand::upsert} and
+	 * {@see \Prado\Data\DataGateway\TDataGatewayCommand::insertOrIgnore} have
+	 * reported the inserted document.
+	 * @param \MongoDB\Driver\WriteResult $result the update result.
+	 * @return int the number of documents modified or inserted.
+	 */
+	protected function countUpdated(\MongoDB\Driver\WriteResult $result): int
+	{
+		$upserted = (int) $result->getUpsertedCount();
+		if ($upserted > 0) {
+			$ids = $result->getUpsertedIds();
+			$this->_connection->setLastInsertID(end($ids));
+		}
+		return (int) $result->getModifiedCount() + $upserted;
 	}
 
 	// -----------------------------------------------------------------------
@@ -537,6 +564,11 @@ class TMongoCommand extends \Prado\TComponent implements IDataCommand
 	 */
 	public function queryScalar(): mixed
 	{
+		// A count command resolves to the integer count, not a document field.
+		// This is what the DataGateway/ActiveRecord count() path expects.
+		if ($this->_operation === self::OP_COUNT) {
+			return $this->count($this->_filter);
+		}
 		$row = $this->queryRow();
 		if ($row === false) {
 			return false;
@@ -587,10 +619,38 @@ class TMongoCommand extends \Prado\TComponent implements IDataCommand
 			$opts = array_merge($this->buildQueryOptions(), $options, ['limit' => 1]);
 			$cursor = $this->executeQuery($f, $opts);
 			$results = $cursor->toArray();
-			return $results !== [] ? $results[0] : null;
+			return $results !== [] ? self::normalizeResultDocument($results[0]) : null;
 		} catch (\Exception $e) {
 			throw new TDbException('mongocommand_query_failed', $e->getMessage());
 		}
+	}
+
+	/**
+	 * Normalizes a result document for the driver-agnostic data layer: BSON
+	 * {@see \MongoDB\BSON\ObjectId} values (including `_id` and ObjectId-typed
+	 * foreign-key fields) become their 24-character hex strings.  ActiveRecord
+	 * and DataGateway treat identifiers as strings (matching
+	 * {@see \Prado\Data\IDataConnection::getLastInsertID}); the command builder
+	 * coerces `_id` strings back to ObjectId at query time.
+	 *
+	 * Shared by {@see findOne} and {@see TMongoDataReader} so single-row and
+	 * multi-row reads present identifiers consistently.
+	 *
+	 * @param mixed $doc the raw result document (array or BSON document).
+	 * @return array the normalized document.
+	 * @since 1.0.0
+	 */
+	public static function normalizeResultDocument(mixed $doc): array
+	{
+		$doc = (array) $doc;
+		foreach ($doc as $key => $value) {
+			if ($value instanceof \MongoDB\BSON\ObjectId) {
+				$doc[$key] = (string) $value;
+			} elseif (is_array($value)) {
+				$doc[$key] = self::normalizeResultDocument($value);
+			}
+		}
+		return $doc;
 	}
 
 	/**
@@ -625,6 +685,7 @@ class TMongoCommand extends \Prado\TComponent implements IDataCommand
 			$bulk = new BulkWrite();
 			$id = $bulk->insert($doc);
 			$this->executeBulk($bulk);
+			$this->_connection->setLastInsertID($id);
 			return $id;
 		} catch (\Exception $e) {
 			throw new TDbException('mongocommand_execute_failed', $e->getMessage());
@@ -647,6 +708,9 @@ class TMongoCommand extends \Prado\TComponent implements IDataCommand
 				$ids[] = $bulk->insert($doc);
 			}
 			$this->executeBulk($bulk);
+			if ($ids !== []) {
+				$this->_connection->setLastInsertID(end($ids));
+			}
 			return $ids;
 		} catch (\Exception $e) {
 			throw new TDbException('mongocommand_execute_failed', $e->getMessage());
@@ -772,6 +836,77 @@ class TMongoCommand extends \Prado\TComponent implements IDataCommand
 		} catch (\Exception $e) {
 			throw new TDbException('mongocommand_query_failed', $e->getMessage());
 		}
+	}
+
+	// -----------------------------------------------------------------------
+	// IDataCommand — parameter binding (no-ops for MongoDB)
+	// -----------------------------------------------------------------------
+
+	/**
+	 * No-op for MongoDB.
+	 *
+	 * MongoDB queries are BSON documents constructed from PHP arrays; values are
+	 * already passed by value and never interpolated into a query string, so
+	 * bound parameters do not apply. The method exists for {@see IDataCommand}
+	 * parity.
+	 *
+	 * @param int|string $name parameter name or 1-based positional index (ignored).
+	 * @param mixed $value the value to bind (ignored).
+	 * @param null|int $dataType PDO data-type constant (ignored).
+	 */
+	public function bindValue($name, $value, $dataType = null): void
+	{
+		// No-op: MongoDB commands do not use bound parameters.
+	}
+
+	/**
+	 * Returns null: MongoDB commands bind no parameters, and BSON carries the type
+	 * of each value, so no driver type token exists.
+	 * @param mixed $value the PHP value to inspect (ignored).
+	 * @return null always.
+	 */
+	public function getColumnTypeFromValue($value)
+	{
+		return null;
+	}
+
+	/**
+	 * No-op for MongoDB.
+	 *
+	 * See {@see bindValue}; MongoDB filter and update documents take their
+	 * values directly from the PHP arrays supplied to the builder API.
+	 *
+	 * @param int|string $name parameter name or 1-based positional index (ignored).
+	 * @param mixed &$value the variable to bind by reference (ignored).
+	 * @param null|int $dataType PDO data-type constant (ignored).
+	 * @param null|int $length maximum expected length in bytes (ignored).
+	 */
+	public function bindParameter($name, &$value, $dataType = null, $length = null): void
+	{
+		// No-op: MongoDB commands do not use bound parameters.
+	}
+
+	/**
+	 * No-op for MongoDB.
+	 *
+	 * MongoDB has no prepared-statement step, but the framework data-gateway
+	 * path ({@see \Prado\Data\DataGateway\TDataGatewayCommand}) calls prepare()
+	 * before execute().  Provided for compatibility with that path.
+	 */
+	public function prepare(): void
+	{
+		// No-op: MongoDB has no prepared-statement step.
+	}
+
+	/**
+	 * No-op for MongoDB.
+	 *
+	 * Mirrors {@see prepare}; PDO commands expose cancel() to release a prepared
+	 * statement, which MongoDB does not use.
+	 */
+	public function cancel(): void
+	{
+		// No-op: MongoDB has no prepared-statement step to cancel.
 	}
 
 	/**

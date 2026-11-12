@@ -28,7 +28,7 @@ use Prado\Data\Common\IDataCommandBuilder;
  * @author Brad Anderson <belisoful@icloud.com>
  * @since 1.0.0
  */
-class TMongoCollectionInfo extends \Prado\TComponent implements \Prado\Data\Common\IDataTableInfo
+class TMongoCollectionInfo extends \Prado\TComponent implements \Prado\Data\Common\IDataTableInfo, \Prado\Data\Common\IDataSchemalessTableInfo
 {
 	private string $_collectionName;
 
@@ -144,6 +144,21 @@ class TMongoCollectionInfo extends \Prado\TComponent implements \Prado\Data\Comm
 	}
 
 	/**
+	 * Returns whether this collection has no authoritative column metadata.
+	 *
+	 * MongoDB is schemaless: without a JSON Schema validator the collection
+	 * imposes no field set, so the field list inferred here (typically just the
+	 * implicit `_id`) is not authoritative.  When true, the ActiveRecord gateway
+	 * persists a record from its own properties rather than this field list.
+	 *
+	 * @return bool true when the collection has no JSON Schema validator.
+	 */
+	public function isSchemaless(): bool
+	{
+		return $this->_validationSchema === [];
+	}
+
+	/**
 	 * Returns the field info for a specific field, or null if not found.
 	 *
 	 * Alias for {@see getField} that satisfies the SQL-centric
@@ -168,6 +183,28 @@ class TMongoCollectionInfo extends \Prado\TComponent implements \Prado\Data\Comm
 	public function getColumnNames(): array
 	{
 		return array_keys($this->_fields);
+	}
+
+	/**
+	 * Returns a map of lower-cased field name => actual field name.
+	 *
+	 * Mirrors {@see \Prado\Data\Common\TDbTableInfo::getLowerCaseColumnNames()}
+	 * so the driver-agnostic dynamic-finder path
+	 * ({@see \Prado\Data\DataGateway\TDataGatewayCommand::extractMatchingConditions})
+	 * works against a MongoDB collection.  When the collection is schemaless (no
+	 * known fields), the returned map is empty and the dynamic finder raises the
+	 * standard "mismatch column name" exception — dynamic finders therefore
+	 * require a validation schema that declares the queried fields.
+	 *
+	 * @return array<string, string> lower-cased field name mapped to actual field name.
+	 */
+	public function getLowerCaseColumnNames(): array
+	{
+		$result = [];
+		foreach (array_keys($this->_fields) as $name) {
+			$result[strtolower((string) $name)] = $name;
+		}
+		return $result;
 	}
 
 	/**
@@ -220,7 +257,7 @@ class TMongoCollectionInfo extends \Prado\TComponent implements \Prado\Data\Comm
 	 * @param IDataConnection $connection the connection to use.
 	 * @return IDataCommandBuilder a new command builder.
 	 */
-	public function createCommandBuilder(IDataConnection $connection): IDataCommandBuilder
+	public function createCommandBuilder($connection): IDataCommandBuilder
 	{
 		return new TMongoCommandBuilder($connection, $this);
 	}

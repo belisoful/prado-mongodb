@@ -371,7 +371,7 @@ class TMongoCollectionGateway extends \Prado\TComponent
 	// -----------------------------------------------------------------------
 
 	/**
-	 * Normalises a raw id value into a {@see ObjectId}.
+	 * Normalizes a raw id value into a {@see ObjectId}.
 	 *
 	 * If the value is already an ObjectId it is returned as-is. String values
 	 * that look like valid 24-hex-character ObjectId strings are converted.

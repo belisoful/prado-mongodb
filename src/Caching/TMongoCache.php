@@ -139,6 +139,16 @@ class TMongoCache extends TCache
 	private string $_databaseName = '';
 
 	/**
+	 * @return bool whether the `mongodb` extension, which the mongodb/mongodb library
+	 *   runs on, is loaded.
+	 * @since 4.4.0
+	 */
+	public static function getIsAvailable(): bool
+	{
+		return extension_loaded('mongodb');
+	}
+
+	/**
 	 * Initializes this module.
 	 *
 	 * This method is required by the IModule interface.
@@ -292,7 +302,7 @@ class TMongoCache extends TCache
 			$connection = $this->getMongoConnection();
 			$bulk = new \MongoDB\Driver\BulkWrite();
 			$bulk->delete(
-				['expire' => ['$gt' => 0, '$lt' => $now]],
+				['expire' => ['$gt' => 0, '$lt' => microtime(true)]],
 				['limit' => 0]
 			);
 			$connection->getManager()->executeBulkWrite(
@@ -512,7 +522,7 @@ class TMongoCache extends TCache
 	 * collection manually, you need to make sure the collection has the following fields:
 	 * - itemkey: string (unique index)
 	 * - value: BSON binary data (serialized PHP value)
-	 * - expire: integer (timestamp, 0 = never expire)
+	 * - expire: number (Unix timestamp with sub-second precision, 0 = never expire)
 	 *
 	 * @param string $value the name of the MongoDB collection to store cache content
 	 * @since 1.0.0
@@ -560,7 +570,7 @@ class TMongoCache extends TCache
 			'itemkey' => $key,
 			'$or' => [
 				['expire' => 0],
-				['expire' => ['$gt' => time()]],
+				['expire' => ['$gt' => microtime(true)]],
 			],
 		];
 		$query = new \MongoDB\Driver\Query($filter, ['sort' => ['expire' => -1], 'limit' => 1]);
@@ -610,7 +620,9 @@ class TMongoCache extends TCache
 		$connection = $this->getMongoConnection();
 		$namespace = $connection->getCollectionNamespace($this->_cacheCollection);
 
-		$expire = ($expire <= 0) ? 0 : time() + $expire;
+		// Sub-second precision keeps a short TTL from expiring early when the
+		// write and a later read straddle a whole-second boundary.
+		$expire = ($expire <= 0) ? 0 : microtime(true) + $expire;
 		$serializedValue = serialize($value);
 
 		$bulk = new \MongoDB\Driver\BulkWrite(['ordered' => true]);
@@ -659,27 +671,38 @@ class TMongoCache extends TCache
 		$connection = $this->getMongoConnection();
 		$namespace = $connection->getCollectionNamespace($this->_cacheCollection);
 
-		$expire = ($expire <= 0) ? 0 : time() + $expire;
+		// Sub-second precision keeps a short TTL from expiring early when the
+		// write and a later read straddle a whole-second boundary.
+		$expire = ($expire <= 0) ? 0 : microtime(true) + $expire;
 		$serializedValue = serialize($value);
 
-		$bulk = new \MongoDB\Driver\BulkWrite(['ordered' => true]);
-		$bulk->insert([
-			'itemkey' => $key,
-			'value' => $serializedValue,
-			'expire' => $expire,
-		]);
+		// Insert only when the key is absent. $setOnInsert leaves an existing
+		// document untouched, so getUpsertedCount() reports whether a new item
+		// was added. This upholds the "add fails on an existing key" contract
+		// whether or not the unique itemkey index is present on the collection.
+		$bulk = new \MongoDB\Driver\BulkWrite();
+		$bulk->update(
+			['itemkey' => $key],
+			['$setOnInsert' => [
+				'itemkey' => $key,
+				'value' => $serializedValue,
+				'expire' => $expire,
+			]],
+			['upsert' => true]
+		);
 
 		try {
-			$connection->getManager()->executeBulkWrite($namespace, $bulk);
-			return true;
+			$result = $connection->getManager()->executeBulkWrite($namespace, $bulk);
+			return $result->getUpsertedCount() > 0;
 		} catch (\MongoDB\Driver\Exception\BulkWriteException $e) {
+			// A concurrent add won the race against the unique itemkey index.
 			if ($e->getCode() === 11000) {
 				return false;
 			}
 			try {
 				$this->initializeCache(true);
-				$connection->getManager()->executeBulkWrite($namespace, $bulk);
-				return true;
+				$result = $connection->getManager()->executeBulkWrite($namespace, $bulk);
+				return $result->getUpsertedCount() > 0;
 			} catch (\Exception $e) {
 				return false;
 			}

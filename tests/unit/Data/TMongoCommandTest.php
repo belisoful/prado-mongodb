@@ -989,20 +989,17 @@ class TMongoCommandTest extends PHPUnit\Framework\TestCase
 		$this->assertIsArray($values);
 	}
 
-public function test_update_with_array_filter()
+	public function test_update_with_array_filter()
 	{
 		$cmd = new TMongoCommand($this->_conn, self::$testCollectionName);
-$cmd->insertOne(['name' => 'arr_filter', 'items' => [1, 2, 3]]);
-		$options = ['arrayFilters' => [['elem' => 2]]];
-		try {
-			$modified = $cmd->updateOne(
-				['name' => 'arr_filter'],
-				['$pull' => ['items' => 2]],
-				$options
-			);
-			$this->assertGreaterThanOrEqual(0, $modified);
-		} catch (\Prado\Exceptions\TDbException $e) {
-			$this->markTestSkipped('arrayFilters not supported: ' . $e->getMessage());
-		}
+		$cmd->insertOne(['name' => 'arr_filter', 'items' => [1, 2, 3]]);
+		$modified = $cmd->updateOne(
+			['name' => 'arr_filter'],
+			['$set' => ['items.$[elem]' => 99]],
+			['arrayFilters' => [['elem' => 2]]]
+		);
+		$this->assertSame(1, $modified);
+		$doc = $cmd->findOne(['name' => 'arr_filter']);
+		$this->assertSame([1, 99, 3], $doc['items']);
 	}
 }

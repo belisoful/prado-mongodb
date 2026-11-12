@@ -41,11 +41,14 @@ use Prado\Exceptions\TConfigurationException;
  * framework components that are unaware of MongoDB can discover the correct
  * metadata and scaffold input builder for a MongoDB connection:
  *
- * - **fxDataGetMetaDataInstance** — returns a {@see TMongoMetaData} when the
- *   framework's metadata factory cannot find a built-in driver handler.
- * - **fxActiveRecordCreateScaffoldInput** — returns a
- *   {@see TMongoScaffoldInput} for scaffold generation against a MongoDB
- *   connection.
+ * - **fxDataGetMetaDataClass** — returns the {@see TMongoMetaData} class name
+ *   when the framework's metadata factory cannot find a built-in driver handler.
+ * - **fxActiveRecordScaffoldInputClass** — returns the {@see TMongoScaffoldInput}
+ *   class name for scaffold generation against a MongoDB connection.
+ *
+ * Both events follow the framework contract: the connection is the event sender,
+ * the driver name is the parameter, and the handler returns a class-name string
+ * that the framework instantiates.
  *
  * @author Brad Anderson <belisoful@icloud.com>
  * @since 1.0.0
@@ -83,7 +86,7 @@ class TMongoSourceConfig extends \Prado\Data\TDataSourceConfig
 	 * @throws TConfigurationException if the module is not a valid MongoDB connection.
 	 * @return TMongoConnection the resolved connection.
 	 */
-	protected function findConnectionByID(string $id): TMongoConnection
+	protected function findConnectionByID($id): TMongoConnection
 	{
 		$conn = $this->getApplication()->getModule($id);
 		if ($conn instanceof TDataSourceConfig) {
@@ -96,47 +99,44 @@ class TMongoSourceConfig extends \Prado\Data\TDataSourceConfig
 	}
 
 	/**
-	 * Global event handler — provides a {@see TMongoMetaData} instance when
-	 * the PRADO framework's metadata factory cannot find a driver handler.
+	 * Global event handler — provides the {@see TMongoMetaData} class name when
+	 * the PRADO framework's metadata factory cannot find a built-in driver handler.
 	 *
-	 * Raised as `fxDataGetMetaDataInstance` on the application event bus.
-	 * Returns null for non-MongoDB connections, allowing other handlers to run.
+	 * Raised as `fxDataGetMetaDataClass` on the application event bus, with the
+	 * connection as the sender and the driver name as the parameter.  The
+	 * framework instantiates the returned class with the connection.  Returns
+	 * null for non-MongoDB drivers, allowing other handlers to run.
 	 *
-	 * @param string $sender the static class raising the event.
-	 * @param IDataConnection|mixed $param the connection whose metadata is needed.
-	 * @return TMongoMetaData|null the metadata instance, or null if not applicable.
+	 * @param mixed $sender the connection raising the event.
+	 * @param mixed $param the driver name of the connection.
+	 * @return ?string the TMongoMetaData class name, or null if not applicable.
 	 */
-	public function fxDataGetMetaDataInstance(string $sender, mixed $param): ?TMongoMetaData
+	public function fxDataGetMetaDataClass(mixed $sender, mixed $param): ?string
 	{
-		if (!($param instanceof IDataConnection)) {
+		if (strtolower((string) $param) !== TMongoConnection::DRIVER_NAME) {
 			return null;
 		}
-		if (strtolower($param->getDriverName()) !== TMongoConnection::DRIVER_NAME) {
-			return null;
-		}
-		return new TMongoMetaData($param);
+		return TMongoMetaData::class;
 	}
 
 	/**
-	 * Global event handler — provides a {@see TMongoScaffoldInput} when the
-	 * PRADO ActiveRecord scaffold system cannot find a built-in input builder
-	 * for a MongoDB connection.
+	 * Global event handler — provides the {@see TMongoScaffoldInput} class name
+	 * when the PRADO ActiveRecord scaffold system cannot find a built-in input
+	 * builder for a MongoDB connection.
 	 *
-	 * Raised as `fxActiveRecordCreateScaffoldInput` on the application event bus.
-	 * Returns null for non-MongoDB connections.
+	 * Raised as `fxActiveRecordScaffoldInputClass` on the application event bus,
+	 * with the connection as the sender and the driver name as the parameter.
+	 * Returns null for non-MongoDB drivers.
 	 *
-	 * @param mixed $sender the object raising the event.
-	 * @param IDataConnection|mixed $param the connection being scaffolded.
-	 * @return TMongoScaffoldInput|null the scaffold input builder, or null if not applicable.
+	 * @param mixed $sender the connection raising the event.
+	 * @param mixed $param the driver name of the connection.
+	 * @return ?string the TMongoScaffoldInput class name, or null if not applicable.
 	 */
-	public function fxActiveRecordCreateScaffoldInput(mixed $sender, mixed $param): ?TMongoScaffoldInput
+	public function fxActiveRecordScaffoldInputClass(mixed $sender, mixed $param): ?string
 	{
-		if (!($param instanceof IDataConnection)) {
+		if (strtolower((string) $param) !== TMongoConnection::DRIVER_NAME) {
 			return null;
 		}
-		if (strtolower($param->getDriverName()) !== TMongoConnection::DRIVER_NAME) {
-			return null;
-		}
-		return new TMongoScaffoldInput();
+		return TMongoScaffoldInput::class;
 	}
 }

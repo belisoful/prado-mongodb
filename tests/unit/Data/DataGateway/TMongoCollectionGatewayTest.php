@@ -266,7 +266,7 @@ class TMongoCollectionGatewayTest extends PHPUnit\Framework\TestCase
 	}
 
 	// -----------------------------------------------------------------------
-	// String ID normalisation
+	// String ID normalization
 	// -----------------------------------------------------------------------
 
 	public function test_find_by_id_with_string_id()

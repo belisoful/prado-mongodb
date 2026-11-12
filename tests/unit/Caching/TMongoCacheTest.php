@@ -682,7 +682,11 @@ class TMongoCacheTest extends PHPUnit\Framework\TestCase
 
 		$generatedKey = (new ReflectionMethod($cache, 'generateUniqueKey'))->invoke($cache, 'key1');
 		$this->assertNotEquals('key1', $generatedKey);
-		$this->assertEquals(32, strlen($generatedKey));
+		// TCache::generateUniqueKey() is a hex digest: md5 (32 chars) through
+		// PRADO 4.3, sha1 (40 chars) from PRADO 4.4.
+		$this->assertMatchesRegularExpression('/^(?:[0-9a-f]{32}|[0-9a-f]{40})$/', $generatedKey);
+		$this->assertSame($generatedKey, (new ReflectionMethod($cache, 'generateUniqueKey'))->invoke($cache, 'key1'));
+		$this->assertNotSame($generatedKey, (new ReflectionMethod($cache, 'generateUniqueKey'))->invoke($cache, 'key2'));
 	}
 
 	// -----------------------------------------------------------------------

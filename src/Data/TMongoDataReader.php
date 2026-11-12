@@ -11,6 +11,7 @@
 namespace Prado\Data;
 
 use MongoDB\Driver\Cursor;
+use Prado\Data\IDataReader;
 use Prado\Exceptions\TDbException;
 
 /**
@@ -81,9 +82,11 @@ class TMongoDataReader extends \Prado\TComponent implements IDataReader
 	 */
 	public function __construct(private TMongoCommand $_command, Cursor $cursor)
 	{
-		// Buffer eagerly: releases the cursor and enables getRowCount().
+		// Buffer eagerly: releases the cursor and enables getRowCount().  Each
+		// document is normalized so identifiers are presented as strings — see
+		// {@see TMongoCommand::normalizeResultDocument}.
 		$raw = $cursor->toArray();
-		$this->_rows = array_map(static fn ($doc) => (array) $doc, $raw);
+		$this->_rows = array_map(static fn ($doc) => TMongoCommand::normalizeResultDocument($doc), $raw);
 		parent::__construct();
 	}
 
@@ -109,6 +112,9 @@ class TMongoDataReader extends \Prado\TComponent implements IDataReader
 	 */
 	public function read(): array|false
 	{
+		if ($this->_closed) {
+			return false;
+		}
 		return $this->_rows[$this->_readPos++] ?? false;
 	}
 
@@ -119,13 +125,17 @@ class TMongoDataReader extends \Prado\TComponent implements IDataReader
 	 */
 	public function readAll(): array
 	{
+		if ($this->_closed) {
+			return [];
+		}
 		$result = array_slice($this->_rows, $this->_readPos);
 		$this->_readPos = count($this->_rows);
 		return $result;
 	}
 
 	/**
-	 * Closes the reader.  After closing, {@see read} will return false.
+	 * Closes the reader.  After closing, {@see read} returns false and
+	 * {@see readAll} returns an empty array.
 	 */
 	public function close(): void
 	{

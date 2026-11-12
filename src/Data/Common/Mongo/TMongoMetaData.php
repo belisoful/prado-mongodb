@@ -11,6 +11,7 @@
 namespace Prado\Data\Common\Mongo;
 
 use MongoDB\Driver\Command;
+use Prado\Data\Common\IDataMetaData;
 use Prado\Data\TMongoConnection;
 use Prado\Exceptions\TDbException;
 
@@ -31,7 +32,7 @@ use Prado\Exceptions\TDbException;
  * @author Brad Anderson <belisoful@icloud.com>
  * @since 1.0.0
  */
-class TMongoMetaData extends \Prado\TComponent implements \Prado\Data\Common\IDataMetaData
+class TMongoMetaData extends \Prado\TComponent implements IDataMetaData
 {
 	private TMongoConnection $_connection;
 
@@ -82,39 +83,6 @@ class TMongoMetaData extends \Prado\TComponent implements \Prado\Data\Common\IDa
 	public function createCommandBuilder($collectionName = null)
 	{
 		return $this->getCollectionInfo($collectionName)->createCommandBuilder($this->_connection);
-	}
-
-	/**
-	 * Quotes a collection name for use in MongoDB queries.
-	 * MongoDB doesn't require quoting, so we return the name as-is.
-	 * @param string $name the collection name to quote.
-	 * @return string the collection name.
-	 */
-	public function quoteTableName($name)
-	{
-		return $name;
-	}
-
-	/**
-	 * Quotes a field name for use in MongoDB queries.
-	 * MongoDB doesn't require quoting, so we return the name as-is.
-	 * @param string $name the field name to quote.
-	 * @return string the field name.
-	 */
-	public function quoteColumnName($name)
-	{
-		return $name;
-	}
-
-	/**
-	 * Quotes a field alias for use in MongoDB queries.
-	 * MongoDB doesn't require quoting, so we return the name as-is.
-	 * @param string $name the field alias to quote.
-	 * @return string the field alias.
-	 */
-	public function quoteColumnAlias($name)
-	{
-		return $name;
 	}
 
 	/**

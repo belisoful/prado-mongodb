@@ -4,10 +4,11 @@ A native MongoDB integration for the [PRADO PHP Framework](https://github.com/pr
 
 ## Requirements
 
-- PHP 8.1 or higher
+- PHP 8.1 or higher (the plugin source is PHP 8.1 compatible; PRADO 4.4.0 itself needs PHP 8.2 or higher)
 - [ext-mongodb](https://pecl.php.net/package/mongodb) (PECL `mongodb` extension)
 - [mongodb/mongodb](https://github.com/mongodb/mongo-php-library) PHP library `^2.1` (installed via Composer)
-- PRADO Framework `^4.3.3` (dev dependency — not required at runtime by consumers)
+- PRADO Framework 4.3.3 or 4.4.0: `composer.json` requires `pradosoft/prado` `^4.3.3@dev` at runtime, and the one code base supports both lines
+- ActiveRecord features (the scaffold input, ActiveRecord over the MongoDB connection) need ActiveRecord: it is built into PRADO 4.3.3; on PRADO 4.4 it is the separate, optional package [`pradosoft/prado-activerecord`](https://github.com/pradosoft/prado-activerecord) (4.4 only), which this plugin does not require (`composer require pradosoft/prado-activerecord`)
 
 ## Installation
 
@@ -60,29 +61,28 @@ This extension mirrors the structure of the PRADO core data-access layer, implem
 
 ```
 src/
+├── Caching/
+│   └── TMongoCache.php               # TCache backed by a MongoDB collection
 ├── Data/
-│   ├── IDataCommand.php          # Interface: execute, query, queryRow, queryScalar, …
-│   ├── IDataConnection.php       # Interface: getActive, createCommand, beginTransaction, …
-│   ├── IDataReader.php           # Interface: Iterator + read, readAll, close, getRowCount
-│   ├── IDataTransaction.php      # Interface: commit, rollback, beginTransaction (reuse)
 │   ├── TMongoConnection.php      # Wraps MongoDB\Driver\Manager
 │   ├── TMongoCommand.php         # Builder + direct-API facade over MongoDB operations
 │   ├── TMongoDataReader.php      # Eagerly-buffered cursor reader implementing IDataReader
-│   ├── TMongoTransaction.php     # Wraps a MongoDB client session + transaction
+│   ├── TMongoTransaction.php     # TDataTransaction subclass wrapping a client session + transaction
 │   ├── TMongoSourceConfig.php    # PRADO bootstrap / TDataSourceConfig subclass
-│   └── Common/
-│       ├── IDataCommandBuilder.php
-│       ├── IDataMetaData.php
-│       ├── IDataTableInfo.php
-│       └── Mongo/
-│           ├── TMongoMetaData.php        # Inspects JSON Schema validators; samples docs
-│           ├── TMongoCollectionInfo.php  # IDataTableInfo for a MongoDB collection
-│           ├── TMongoFieldInfo.php       # Per-field BSON→PHP type information
-│           └── TMongoCommandBuilder.php  # IDataCommandBuilder for MongoDB
-├── DataGateway/
-│   └── TMongoCollectionGateway.php  # High-level CRUD + magic finders
+│   ├── ActiveRecord/Scaffold/InputBuilder/
+│   │   └── TMongoScaffoldInput.php   # BSON type → scaffold input controls
+│   ├── DataGateway/
+│   │   ├── TMongoCollectionGateway.php  # High-level CRUD + magic finders
+│   │   └── TMongoQueryCriteria.php      # IDataCriteria carrying a MongoDB filter document
+│   └── Common/Mongo/
+│       ├── TMongoMetaData.php        # Inspects JSON Schema validators; samples docs
+│       ├── TMongoCollectionInfo.php  # IDataTableInfo for a MongoDB collection
+│       ├── TMongoFieldInfo.php       # Per-field BSON→PHP type information
+│       └── TMongoCommandBuilder.php  # IDataCommandBuilder for MongoDB
 └── errorMessages.txt             # Error-key → human-readable message map
 ```
+
+The `IData*` interfaces that these classes implement (`IDataConnection`, `IDataCommand`, `IDataReader`, `IDataTransaction`, `IDataMetaData`, `IDataCommandBuilder`, `IDataTableInfo`) are part of the PRADO framework.
 
 ---
 
@@ -138,7 +138,7 @@ $cmd = $conn->createCommand('users');
 $user = $cmd->findOne(['email' => 'alice@example.com']);
 
 // Find many documents
-$active = $cmd->findMany(['active' => true], sort: ['name' => 1]);
+$active = $cmd->findMany(['active' => true], options: ['sort' => ['name' => 1]]);
 
 // Insert documents
 $result = $cmd->insertOne(['name' => 'Bob', 'email' => 'bob@example.com']);
@@ -184,7 +184,7 @@ $cmd = $conn->createCommand('orders')
 $reader = $cmd->query();
 ```
 
-Available operations: `OP_FIND`, `OP_INSERT`, `OP_UPDATE`, `OP_DELETE`, `OP_AGGREGATE`, `OP_COUNT`, `OP_DISTINCT`.
+Available operations: `OP_FIND`, `OP_INSERT_ONE`, `OP_INSERT_MANY`, `OP_UPDATE_ONE`, `OP_UPDATE_MANY`, `OP_DELETE_ONE`, `OP_DELETE_MANY`, `OP_AGGREGATE`, `OP_COUNT`, `OP_DISTINCT`.
 
 ### Transactions
 
@@ -236,8 +236,8 @@ $active  = $gw->findAllByActive(true);
 $deleted = $gw->deleteByArchived(true);
 
 // Full CRUD
-$gw->insert(['name' => 'Eve', 'email' => 'eve@example.com']);
-$gw->update(['$set' => ['verified' => true]], ['name' => 'Eve']);
+$id = $gw->insert(['name' => 'Eve', 'email' => 'eve@example.com']); // the generated _id
+$gw->update(['name' => 'Eve'], ['$set' => ['verified' => true]]);    // filter first, then the update
 $gw->delete(['email' => 'eve@example.com']);
 
 // Events
@@ -249,7 +249,7 @@ $gw->OnExecuteCommand[] = function($sender, $param) {
 };
 ```
 
-`normalizeId()` automatically converts 24-character hex strings to `MongoDB\BSON\ObjectId` in filter values, so you can pass raw string IDs from HTTP requests safely.
+`findById()`, `findAllByIds()`, `updateById()` and `deleteById()` convert a 24-character hex string to a `MongoDB\BSON\ObjectId`, so you can pass raw string IDs from HTTP requests safely.
 
 ### Metadata Introspection
 
@@ -264,7 +264,7 @@ $names = $meta->findTableNames();
 // Inspect a collection's schema
 $info = $meta->getTableInfo('users');
 echo $info->getTableName();         // 'users'
-echo $info->getTableFullName();     // 'myapp.users'
+echo $info->getTableFullName();     // 'users' (MongoDB has no schema prefix)
 echo $info->getIsView() ? 'view' : 'collection';
 
 foreach ($info->getColumns() as $fieldName => $field) {
@@ -289,16 +289,34 @@ $reader = $cmd->query();
 
 | Method | Description |
 |---|---|
-| `createFindCommand($filter, $params, $ordering, $limit, $offset, $select)` | Find documents |
+| `createFindCommand($filter, $params, $ordering, $limit, $offset, $select)` | Find documents; `$params`, when not empty, are merged into the filter |
 | `createCountCommand($filter, $params)` | Count matching documents |
 | `createInsertCommand($data)` | Insert one document |
 | `createInsertOrIgnoreCommand($data)` | Insert; skip on duplicate `_id` |
-| `createUpsertCommand($data, $update, $conflict)` | Replace or insert by `_id` |
-| `createUpdateCommand($data, $filter, $params)` | Update matching documents |
+| `createUpsertCommand($data, $update, $conflict)` | `updateOne` with `upsert`, matched on the `$conflict` fields (default `_id`); `$update` follows `TMysqlCommandBuilder` and is written with `$set`, the rest of `$data` with `$setOnInsert` |
+| `createUpdateCommand($data, $filter, $params)` | `$set` the data on all matching documents |
 | `createDeleteCommand($filter, $params)` | Delete matching documents |
-| `applyLimitOffset($cmd, $limit, $offset)` | Attach limit/skip |
-| `applyOrdering($cmd, $ordering)` | Attach sort (`asc`/`desc` → `1`/`-1`) |
-| `getSearchExpression($fields, $keywords)` | Build a `$regex` OR filter |
+| `applyLimitOffset($sql, $limit, $offset)`, `applyOrdering($sql, $ordering)` | No-ops that return `$sql` unchanged; the find command takes limit, skip and sort as options (`applyLimitSkip()` and `applySort()` fill an options array) |
+| `getSearchExpression($fields, $keywords)` | A JSON-encoded `$regex` `$or` filter (`getSearchFilter()` returns it as an array) |
+| `createFindCommandFromCriteria()`, `createCountCommandFromCriteria()`, `createUpdateCommandFromCriteria()`, `createDeleteCommandFromCriteria()` | Build the command from an `IDataCriteria` |
+| `createPrimaryKeyCriteria()`, `createIndexCriteria()`, `createIndexedFindCommand()` | Return `TMongoQueryCriteria` filters for `_id` and relation batch-loading |
+| `setDbConnection($conn)`, `getLastInsertID()` | The connection of the builder; the last `_id` an insert recorded on the connection |
+
+The `$filter` argument is a MongoDB filter array, a JSON object string, or `'1=1'` (or empty) to match every document. Other SQL text raises a `TDbException` (`mongocommandbuilder_sql_condition_unsupported`) instead of matching every document.
+
+### Criteria
+
+`TMongoQueryCriteria` carries a MongoDB filter document together with the portable ordering, limit, offset and select of `IDataCriteria`. It implements `IDataCriteria` directly and is **not** a `TSqlCriteria`: it has no SQL condition. The framework's `TTableGateway` (PRADO 4.3.3 and 4.4.0) accepts a `TMongoQueryCriteria`, and ActiveRecord passes it through to the command builder.
+
+```php
+use Prado\Data\DataGateway\TMongoQueryCriteria;
+
+$criteria = new TMongoQueryCriteria(['status' => 'active']);
+$criteria->OrdersBy['created_at'] = 'desc';
+$criteria->Limit = 10;
+```
+
+A `TSqlCriteria` with a SQL condition string, given to the builder, raises the same `TDbException` (`mongocommandbuilder_sql_condition_unsupported`); it does not match every document. A criteria without a condition matches every document.
 
 ---
 
@@ -328,7 +346,13 @@ Register the extension in your PRADO application config:
 ],
 ```
 
-`TMongoSourceConfig` extends `TDataSourceConfig` and registers the global `fxDataGetMetaDataInstance` event handler, making `$app->getModule('db')->getDbConnection()` return a live `TMongoConnection`.
+`TMongoSourceConfig` extends `TDataSourceConfig`, so `$app->getModule('db')->getDbConnection()` returns a live `TMongoConnection`.
+
+Because `composer.json` also declares `extra.prado.bootstrap` (`Prado\Data\TMongoSourceConfig`), the module can be registered by package name instead, `<module id="belisoful/prado-mongodb" ConnectionString="…" DatabaseName="myapp" />`, without a `class` attribute.
+
+`TMongoSourceConfig` also handles the global `fxDataGetMetaDataClass` event. PRADO's `TDbMetaData::getInstance()` raises it on the connection, with the driver name as the parameter. For the `'mongo'` driver the handler returns the `TMongoMetaData` class name, and PRADO instantiates it with the connection. The event is needed only when `TDbMetaData::getInstance($conn)` is called directly (it throws when no `TMongoSourceConfig` is registered or listening): `$conn->getDbMetaData()` builds the metadata directly, and `TTableGateway` and ActiveRecord (`TActiveRecordGateway`) call it, on PRADO 4.3.3 and 4.4.0 alike, so neither needs a listener.
+
+It also handles `fxActiveRecordScaffoldInputClass`: for the `'mongo'` driver the handler returns the `TMongoScaffoldInput` class name. ActiveRecord raises that event on the connection before its built-in driver switch (PRADO 4.3.3 and `prado-activerecord` for 4.4), so with the module registered (or listening) the scaffold uses `TMongoScaffoldInput`.
 
 ---
 
@@ -355,28 +379,41 @@ $reader->close();
 echo $reader->getIsClosed(); // true
 ```
 
-Attempting to `rewind()` a reader that has already yielded at least one row throws `TDbException('dbdatareader_rewind_invalid')`, enforcing forward-only semantics consistent with the SQL data reader.
+The reader is forward-only: the first `rewind()` (the start of a `foreach`) succeeds, and a second `rewind()` on the same reader throws `TDbException('dbdatareader_rewind_invalid')`, consistent with the SQL data reader.
 
 ---
 
 ## Error Keys
 
-All exceptions thrown by this extension use string error keys mapped in `src/errorMessages.txt`:
+The messages of this extension are in `src/errorMessages.txt`, which `composer.json` registers as `extra.prado.error-messages` (`TMongoConnection` also registers it):
 
 | Key | Meaning |
 |---|---|
-| `dbdatareader_rewind_invalid` | Attempted to rewind a reader already past its first row |
+| `mongoconnection_extension_required` | `ext-mongodb` is not loaded |
+| `mongoconnection_open_failed` | Failed to establish the MongoDB connection |
+| `mongoconnection_connection_inactive` | Method called on an inactive connection |
+| `mongoconnection_missing_database` | `DatabaseName` is not set before a collection is accessed |
+| `mongocommand_execute_failed` | A command failed to execute |
+| `mongocommand_query_failed` | A query failed to execute |
+| `mongotransaction_inactive` | `commit()` or `rollback()` on an inactive transaction |
 | `mongometadata_no_collections` | No collections found in the target database |
+| `mongocommandbuilder_sql_condition_unsupported` | A SQL condition was given to the MongoDB command builder |
+| `mongoquerycriteria_parameters_invalid` | `TMongoQueryCriteria` parameters were neither an array nor an `ArrayAccess` |
+| `dbtransaction_transaction_superseded` | A transaction object was reactivated after a newer one superseded it |
+
+`dbdatareader_rewind_invalid` and `dbconnection_active_transaction` are framework keys.
 
 ---
 
 ## Development
 
+The manifest resolves `pradosoft/prado` from a sibling checkout at `../prado` (a Composer `path` repository). The branch checked out there decides the PRADO line under test: `prado-4.3` is 4.3.3, `master` is 4.4.0. PRADO 4.4 needs ActiveRecord for the tests: add it with `composer require --dev pradosoft/prado-activerecord:dev-main`.
+
 ### Running Tests
 
 ```sh
 composer install
-vendor/bin/phpunit --testsuite unit
+composer unittest            # vendor/bin/phpunit --testsuite unit
 ```
 
 Live tests that require a running MongoDB instance read connection details from environment variables:
@@ -386,7 +423,9 @@ Live tests that require a running MongoDB instance read connection details from 
 | `MONGODB_URI` | `mongodb://localhost:27017` | MongoDB connection URI |
 | `MONGODB_DATABASE` | `prado_unitest` | Database to use for tests |
 
-Tests call `markTestSkipped()` when the server is unreachable, so the suite always passes without a live database.
+The test bootstrap seeds that database with `tests/initdb_mongodb.js` through `mongosh` when `mongosh` is installed. Tests call `markTestSkipped()` when the `mongodb` extension is missing or the server is unreachable, and the ActiveRecord tests skip when the ActiveRecord package is absent, so the suite passes without a live database.
+
+`.github/workflows/prado-mongo.yml` runs a matrix of PRADO 4.3.3 (`prado-4.3`) on PHP 8.1 and 8.3 and PRADO 4.4.0 (`master`) on PHP 8.2 and 8.4. Each job checks out the framework as the sibling `prado` directory, starts a `mongo:7` service, runs `composer validate --strict`, php-cs-fixer and phpstan, adds `pradosoft/prado-activerecord:dev-main` on the 4.4 jobs only, installs `mongosh` to seed `tests/initdb_mongodb.js`, and runs `composer unittest` with `MONGODB_URI=mongodb://localhost:27017` and `MONGODB_DATABASE=prado_unitest`; the job fails if any test was skipped. It also runs weekly.
 
 ### Code Quality
 
