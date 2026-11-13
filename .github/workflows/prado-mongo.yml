@@ -89,11 +89,11 @@ jobs:
       - name: Validate code using phpstan
         run: phpstan analyse --memory-limit=512M --error-format=checkstyle | cs2pr
 
-      - name: Install mongosh
-        run: npm install -g mongosh
-
+      # The mongo service image ships mongosh, so the schema script runs inside the container.
       - name: Setup MongoDB schema
-        run: mongosh "mongodb://localhost:27017/prado_unitest" --quiet tests/initdb_mongodb.js
+        run: |
+          docker cp tests/initdb_mongodb.js "${{ job.services.mongodb.id }}:/tmp/initdb_mongodb.js"
+          docker exec "${{ job.services.mongodb.id }}" mongosh "mongodb://localhost:27017/prado_unitest" --quiet /tmp/initdb_mongodb.js
 
       # A test that cannot run here skips itself; on this runner every prerequisite is installed, so
       # a skip means a test stopped running. The step fails on it.
