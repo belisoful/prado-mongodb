@@ -14,17 +14,6 @@ jobs:
     name: PRADO ${{ matrix.prado }} / PHP ${{ matrix.php }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    services:
-      mongodb:
-        image: mongo:7
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1})'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-
     strategy:
       fail-fast: false
       matrix:
@@ -89,11 +78,21 @@ jobs:
       - name: Validate code using phpstan
         run: phpstan analyse --memory-limit=512M --error-format=checkstyle | cs2pr
 
-      # The mongo service image ships mongosh, so the schema script runs inside the container.
+      # Multi-document transactions need a replica set, and a service container cannot take the
+      # --replSet argument, so MongoDB runs as a single-node replica set started here. Its image
+      # ships mongosh, so the schema script runs inside the container.
+      - name: Start MongoDB (single-node replica set)
+        run: |
+          docker run -d --name mongodb -p 27017:27017 mongo:7 --replSet rs0 --bind_ip_all
+          for i in $(seq 1 30); do docker exec mongodb mongosh --quiet --eval 'db.runCommand({ping:1})' > /dev/null 2>&1 && break; sleep 2; done
+          docker exec mongodb mongosh --quiet --eval 'rs.initiate({_id: "rs0", members: [{_id: 0, host: "localhost:27017"}]})'
+          for i in $(seq 1 30); do [ "$(docker exec mongodb mongosh --quiet --eval 'db.hello().isWritablePrimary')" = "true" ] && break; sleep 2; done
+          docker exec mongodb mongosh --quiet --eval 'db.hello().isWritablePrimary' | grep -q true
+
       - name: Setup MongoDB schema
         run: |
-          docker cp tests/initdb_mongodb.js "${{ job.services.mongodb.id }}:/tmp/initdb_mongodb.js"
-          docker exec "${{ job.services.mongodb.id }}" mongosh "mongodb://localhost:27017/prado_unitest" --quiet /tmp/initdb_mongodb.js
+          docker cp tests/initdb_mongodb.js mongodb:/tmp/initdb_mongodb.js
+          docker exec mongodb mongosh "mongodb://localhost:27017/prado_unitest" --quiet /tmp/initdb_mongodb.js
 
       # A test that cannot run here skips itself; on this runner every prerequisite is installed, so
       # a skip means a test stopped running. The step fails on it.
